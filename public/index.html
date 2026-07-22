@@ -397,21 +397,26 @@
                         <div class="w-full h-72" id="analytics-dist-chart"></div>
                     </div>
                 </div>
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
                     <div class="glass-card p-6 rounded-xl">
                         <h4 class="text-xs font-semibold text-zinc-500 uppercase tracking-wider block">Win Streak</h4>
                         <div class="font-outfit font-bold text-4xl text-emerald-450 mt-2" id="analytics-streak">0 trades</div>
-                        <p class="text-xs text-zinc-600 mt-2">Active winning run</p>
+                        <p class="text-xs text-zinc-650 mt-2">Active winning run</p>
+                    </div>
+                    <div class="glass-card p-6 rounded-xl">
+                        <h4 class="text-xs font-semibold text-zinc-500 uppercase tracking-wider block">Avg Wins before Loss</h4>
+                        <div class="font-outfit font-bold text-4xl text-brand-400 mt-2" id="analytics-avg-win-streak">0.0 wins</div>
+                        <p class="text-xs text-zinc-650 mt-2">Average wins before a loss</p>
                     </div>
                     <div class="glass-card p-6 rounded-xl">
                         <h4 class="text-xs font-semibold text-zinc-500 uppercase tracking-wider block">Avg Win Size</h4>
                         <div class="font-outfit font-bold text-4xl text-white mt-2" id="analytics-avg-win">+$0.00</div>
-                        <p class="text-xs text-zinc-600 mt-2">Mean profit per win trade</p>
+                        <p class="text-xs text-zinc-655 mt-2">Mean profit per win trade</p>
                     </div>
                     <div class="glass-card p-6 rounded-xl">
                         <h4 class="text-xs font-semibold text-zinc-500 uppercase tracking-wider block">Avg Loss Size</h4>
                         <div class="font-outfit font-bold text-4xl text-white mt-2" id="analytics-avg-loss">-$0.00</div>
-                        <p class="text-xs text-zinc-600 mt-2">Mean loss per losing trade</p>
+                        <p class="text-xs text-zinc-660 mt-2">Mean loss per losing trade</p>
                     </div>
                 </div>
             </div>
@@ -865,6 +870,27 @@
                 }
             }
             document.getElementById('analytics-streak').innerText = `${activeStreak} trades`;
+
+            // Avg Win Streak (wins before loss)
+            let winStreaks = [];
+            let currentStr = 0;
+            const chronoClosed = [...closedTrades].reverse(); // closedTrades is newest-first, reverse to make it oldest-first
+            
+            chronoClosed.forEach(t => {
+                if (t.pnl > 0) {
+                    currentStr++;
+                } else if (t.pnl < 0) {
+                    if (currentStr > 0) {
+                        winStreaks.push(currentStr);
+                        currentStr = 0;
+                    }
+                }
+            });
+            if (currentStr > 0) {
+                winStreaks.push(currentStr);
+            }
+            const avgWinStr = winStreaks.length > 0 ? winStreaks.reduce((a, b) => a + b, 0) / winStreaks.length : 0;
+            document.getElementById('analytics-avg-win-streak').innerText = `${avgWinStr.toFixed(1)} wins`;
 
             // Win/Loss average sizes
             const wins = closedTrades.filter(t => t.pnl > 0).map(t => t.pnl);

@@ -221,6 +221,26 @@ app.get('/api/stats', (req, res) => {
       
       const avgTradeSize = recent.length > 0 ? totalShares / recent.length : 0;
       
+      // Calculate average wins before a loss (average win streak length)
+      let winStreaks: number[] = [];
+      let currentStreak = 0;
+      const chronoClosed = [...closed].sort((a: any, b: any) => new Date(a.entry_time).getTime() - new Date(b.entry_time).getTime());
+      
+      chronoClosed.forEach((t: any) => {
+        if (t.pnl > 0) {
+          currentStreak++;
+        } else if (t.pnl < 0) {
+          if (currentStreak > 0) {
+            winStreaks.push(currentStreak);
+            currentStreak = 0;
+          }
+        }
+      });
+      if (currentStreak > 0) {
+        winStreaks.push(currentStreak);
+      }
+      const avgWinStreak = winStreaks.length > 0 ? winStreaks.reduce((a, b) => a + b, 0) / winStreaks.length : 0;
+      
       res.json({
         ...stats,
         winLossDist: { wins, losses },
@@ -229,7 +249,8 @@ app.get('/api/stats', (req, res) => {
         topMarket,
         bestTrade,
         worstTrade,
-        avgTradeSize
+        avgTradeSize,
+        avgWinStreak
       });
     } else {
       res.status(500).json({ error: 'Paper trader not initialized' });
