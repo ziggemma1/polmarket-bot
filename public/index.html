@@ -1,0 +1,920 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Polymarket Bot Terminal</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Tailwind CSS (v3 CDN) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        outfit: ['Outfit', 'sans-serif'],
+                    },
+                    colors: {
+                        brand: {
+                            50: '#f5f3ff',
+                            100: '#ede9fe',
+                            200: '#ddd6fe',
+                            300: '#c084fc',
+                            400: '#a855f7',
+                            500: '#8b5cf6',
+                            600: '#7c3aed',
+                            700: '#6d28d9',
+                            800: '#5b21b6',
+                            900: '#4c1d95',
+                            950: '#09090b',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- ApexCharts -->
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        body {
+            background-color: #09090b;
+            color: #f4f4f5;
+        }
+        .glass-card {
+            background: rgba(24, 24, 27, 0.75);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(39, 39, 42, 0.6);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .glass-card:hover {
+            border-color: rgba(139, 92, 246, 0.4);
+            box-shadow: 0 10px 30px -10px rgba(139, 92, 246, 0.15);
+            transform: translateY(-2px);
+        }
+        /* Custom Scrollbars */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(9, 9, 11, 0.3);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(39, 39, 42, 0.8);
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(139, 92, 246, 0.5);
+        }
+        /* Active Tab Animation */
+        .sidebar-item.active {
+            background: linear-gradient(90deg, rgba(139, 92, 246, 0.15) 0%, rgba(139, 92, 246, 0) 100%);
+            border-left: 3px solid #8b5cf6;
+            color: #ffffff;
+        }
+        /* Neon Glow Utility */
+        .glow-indigo {
+            box-shadow: 0 0 40px -5px rgba(99, 102, 241, 0.15);
+        }
+    </style>
+</head>
+<body class="font-sans antialiased overflow-hidden h-screen flex">
+
+    <!-- SIDEBAR (LEFT) -->
+    <aside class="w-64 border-r border-zinc-800 bg-zinc-950 flex flex-col justify-between shrink-0 h-full">
+        <div>
+            <!-- Logo Header -->
+            <div class="h-16 flex items-center px-6 border-b border-zinc-800 gap-3">
+                <div class="w-8 h-8 rounded-lg bg-gradient-to-tr from-brand-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-brand-500/20">
+                    <i data-lucide="activity" class="w-5 h-5 text-white"></i>
+                </div>
+                <span class="font-outfit font-bold text-lg bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent">POLYMARKET BOT</span>
+            </div>
+
+            <!-- Navigation Links -->
+            <nav class="mt-6 px-3 space-y-1">
+                <button onclick="switchTab('dashboard')" id="nav-dashboard" class="sidebar-item active w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-zinc-400 hover:text-white hover:bg-zinc-900/50 transition-all duration-200">
+                    <i data-lucide="layout-dashboard" class="w-4 h-4"></i>
+                    <span>Dashboard</span>
+                </button>
+                <button onclick="switchTab('trades')" id="nav-trades" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-zinc-400 hover:text-white hover:bg-zinc-900/50 transition-all duration-200">
+                    <i data-lucide="list-ordered" class="w-4 h-4"></i>
+                    <span>Trades History</span>
+                </button>
+                <button onclick="switchTab('analytics')" id="nav-analytics" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-zinc-400 hover:text-white hover:bg-zinc-900/50 transition-all duration-200">
+                    <i data-lucide="bar-chart-3" class="w-4 h-4"></i>
+                    <span>Analytics</span>
+                </button>
+                <button onclick="switchTab('settings')" id="nav-settings" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-zinc-400 hover:text-white hover:bg-zinc-900/50 transition-all duration-200">
+                    <i data-lucide="sliders" class="w-4 h-4"></i>
+                    <span>Settings</span>
+                </button>
+            </nav>
+        </div>
+
+        <!-- Sidebar Footer Status -->
+        <div class="p-4 border-t border-zinc-800 bg-zinc-950/80">
+            <div class="flex items-center justify-between text-xs text-zinc-500 mb-2">
+                <span>Database Sync</span>
+                <span class="flex items-center gap-1.5 text-emerald-500 font-semibold">
+                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span>
+                    Live
+                </span>
+            </div>
+            <div class="text-[10px] text-zinc-600 font-mono select-none break-all" id="db-conn-str">
+                MongoDB connected
+            </div>
+        </div>
+    </aside>
+
+    <!-- MAIN APP WRAPPER (RIGHT) -->
+    <div class="flex-1 flex flex-col overflow-hidden h-full">
+        
+        <!-- TOP HEADER BAR -->
+        <header class="h-16 border-b border-zinc-800 bg-zinc-950/50 flex items-center justify-between px-8 shrink-0">
+            <div>
+                <h1 class="font-outfit font-semibold text-lg text-white" id="welcome-msg">Welcome Back 🎉</h1>
+                <p class="text-xs text-zinc-500">Terminal monitoring interface for automated sniping</p>
+            </div>
+            <div class="flex items-center gap-4">
+                <!-- Mode Badge -->
+                <span class="px-2.5 py-1 rounded-md text-xs font-semibold bg-brand-500/10 text-brand-400 border border-brand-500/20" id="header-mode">
+                    PAPER MODE
+                </span>
+                <!-- Status Badge -->
+                <span class="flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/25" id="header-status">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    🟢 Online
+                </span>
+            </div>
+        </header>
+
+        <!-- MAIN SCROLLABLE CONTAINER -->
+        <main class="flex-1 overflow-y-auto p-8 space-y-8 h-full bg-gradient-to-b from-zinc-950 to-zinc-900/30">
+
+            <!-- TAB: DASHBOARD -->
+            <div id="tab-dashboard" class="tab-content space-y-8">
+                <!-- STATS CARDS ROW -->
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+                    <!-- Stat Card 1 -->
+                    <div class="glass-card p-6 rounded-xl relative overflow-hidden">
+                        <div class="absolute -right-4 -bottom-4 text-zinc-800/10">
+                            <i data-lucide="trending-up" class="w-24 h-24"></i>
+                        </div>
+                        <span class="text-xs font-semibold text-zinc-500 uppercase tracking-wider block">Total P&L</span>
+                        <div class="flex items-baseline gap-2 mt-2">
+                            <span class="font-outfit font-bold text-3xl text-white" id="card-pnl">$0.00</span>
+                            <span class="text-xs font-semibold text-emerald-400 flex items-center" id="card-pnl-trend">
+                                <i data-lucide="arrow-up-right" class="w-3.5 h-3.5 mr-0.5"></i>
+                                +0%
+                            </span>
+                        </div>
+                        <p class="text-xs text-zinc-600 mt-2">Total performance yield</p>
+                    </div>
+
+                    <!-- Stat Card 2 -->
+                    <div class="glass-card p-6 rounded-xl relative overflow-hidden">
+                        <div class="absolute -right-4 -bottom-4 text-zinc-800/10">
+                            <i data-lucide="award" class="w-24 h-24"></i>
+                        </div>
+                        <span class="text-xs font-semibold text-zinc-500 uppercase tracking-wider block">Win Rate</span>
+                        <div class="flex items-baseline gap-2 mt-2">
+                            <span class="font-outfit font-bold text-3xl text-white" id="card-winrate">0.0%</span>
+                        </div>
+                        <p class="text-xs text-zinc-600 mt-2">Success execution percentage</p>
+                    </div>
+
+                    <!-- Stat Card 3 -->
+                    <div class="glass-card p-6 rounded-xl relative overflow-hidden">
+                        <div class="absolute -right-4 -bottom-4 text-zinc-800/10">
+                            <i data-lucide="zap" class="w-24 h-24"></i>
+                        </div>
+                        <span class="text-xs font-semibold text-zinc-500 uppercase tracking-wider block">Trades Today</span>
+                        <div class="flex items-baseline gap-2 mt-2">
+                            <span class="font-outfit font-bold text-3xl text-white" id="card-trades-today">0</span>
+                            <span class="text-xs text-zinc-500" id="card-limit">/ 500 cap</span>
+                        </div>
+                        <p class="text-xs text-zinc-600 mt-2">Daily snipes execution counter</p>
+                    </div>
+
+                    <!-- Stat Card 4 -->
+                    <div class="glass-card p-6 rounded-xl relative overflow-hidden">
+                        <div class="absolute -right-4 -bottom-4 text-zinc-800/10">
+                            <i data-lucide="wallet" class="w-24 h-24"></i>
+                        </div>
+                        <span class="text-xs font-semibold text-zinc-500 uppercase tracking-wider block">Current Balance</span>
+                        <div class="flex items-baseline gap-2 mt-2">
+                            <span class="font-outfit font-bold text-3xl text-white" id="card-balance">$10,000.00</span>
+                        </div>
+                        <p class="text-xs text-zinc-600 mt-2">Available paper capital (USDC)</p>
+                    </div>
+                </div>
+
+                <!-- PERFORMANCE CHART SECTION -->
+                <div class="glass-card p-6 rounded-xl glow-indigo">
+                    <div class="flex justify-between items-center mb-6">
+                        <div>
+                            <h3 class="font-outfit font-bold text-lg text-white">Performance Progression</h3>
+                            <p class="text-xs text-zinc-500">Cumulative profit progression over the last 30 trades</p>
+                        </div>
+                        <div class="flex items-center gap-6 text-xs text-zinc-400 font-mono">
+                            <div>Best: <span class="text-emerald-400 font-semibold" id="chart-best">$0.00</span></div>
+                            <div>Worst: <span class="text-rose-400 font-semibold" id="chart-worst">$0.00</span></div>
+                            <div>Average: <span class="text-brand-400 font-semibold" id="chart-avg">$0.00</span></div>
+                        </div>
+                    </div>
+                    <!-- Performance Chart Container -->
+                    <div class="w-full h-80" id="performance-chart"></div>
+                </div>
+
+                <!-- TWO COLUMN LAYOUT -->
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    <!-- Left Column: Recent Trades (Width: 2/3) -->
+                    <div class="lg:col-span-2 glass-card p-6 rounded-xl flex flex-col h-[400px]">
+                        <div class="flex justify-between items-center mb-4">
+                            <div>
+                                <h3 class="font-outfit font-bold text-base text-white">Recent Snipes</h3>
+                                <p class="text-xs text-zinc-500">Recent market positions captured by the algorithm</p>
+                            </div>
+                            <button onclick="switchTab('trades')" class="text-xs font-semibold text-brand-400 hover:text-brand-300 transition duration-150">
+                                View Full History
+                            </button>
+                        </div>
+                        <!-- Trades Table -->
+                        <div class="flex-1 overflow-y-auto">
+                            <table class="w-full text-left border-collapse text-xs">
+                                <thead>
+                                    <tr class="border-b border-zinc-800 text-zinc-500 uppercase tracking-wider text-[10px]">
+                                        <th class="py-3 px-4 font-semibold">Time</th>
+                                        <th class="py-3 px-4 font-semibold">Market</th>
+                                        <th class="py-3 px-4 font-semibold text-center">Side</th>
+                                        <th class="py-3 px-4 font-semibold text-right">Entry</th>
+                                        <th class="py-3 px-4 font-semibold text-right">Strike Price</th>
+                                        <th class="py-3 px-4 font-semibold text-right">PnL</th>
+                                        <th class="py-3 px-4 font-semibold text-center">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="recent-trades-body" class="divide-y divide-zinc-900">
+                                    <!-- Dynamic content goes here -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Right Column: Stats (Width: 1/3) -->
+                    <div class="glass-card p-6 rounded-xl flex flex-col justify-between h-[400px]">
+                        <div>
+                            <h3 class="font-outfit font-bold text-base text-white">Distribution</h3>
+                            <p class="text-xs text-zinc-500 mb-6">Win rates and position direction aggregates</p>
+                        </div>
+                        <!-- Donut Charts Row -->
+                        <div class="grid grid-cols-2 gap-4 flex-1 items-center">
+                            <div class="flex flex-col items-center">
+                                <div id="win-loss-donut" class="w-full"></div>
+                                <span class="text-[10px] text-zinc-500 font-medium mt-1">Win/Loss Split</span>
+                            </div>
+                            <div class="flex flex-col items-center">
+                                <div id="side-donut" class="w-full"></div>
+                                <span class="text-[10px] text-zinc-500 font-medium mt-1">YES vs NO</span>
+                            </div>
+                        </div>
+                        <div class="border-t border-zinc-850 pt-4 mt-4 flex items-center justify-between text-xs">
+                            <span class="text-zinc-500">Average profit per trade:</span>
+                            <span class="font-bold text-emerald-400 font-mono" id="stat-avg-pnl">+$0.00</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- QUICK STATS FOOTER -->
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+                    <div class="glass-card p-4 rounded-xl flex items-center gap-4">
+                        <div class="p-3 rounded-lg bg-zinc-900 text-brand-400">
+                            <i data-lucide="flame" class="w-5 h-5"></i>
+                        </div>
+                        <div>
+                            <span class="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider block">Top Market</span>
+                            <span class="text-xs font-semibold text-white truncate max-w-[150px] block" id="footer-top-market">N/A</span>
+                        </div>
+                    </div>
+
+                    <div class="glass-card p-4 rounded-xl flex items-center gap-4">
+                        <div class="p-3 rounded-lg bg-zinc-900 text-emerald-400">
+                            <i data-lucide="crown" class="w-5 h-5"></i>
+                        </div>
+                        <div>
+                            <span class="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider block">Best Trade</span>
+                            <span class="text-xs font-semibold text-emerald-450 font-mono" id="footer-best-trade">+$0.00</span>
+                        </div>
+                    </div>
+
+                    <div class="glass-card p-4 rounded-xl flex items-center gap-4">
+                        <div class="p-3 rounded-lg bg-zinc-900 text-rose-400">
+                            <i data-lucide="skull" class="w-5 h-5"></i>
+                        </div>
+                        <div>
+                            <span class="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider block">Worst Trade</span>
+                            <span class="text-xs font-semibold text-rose-400 font-mono" id="footer-worst-trade">-$0.00</span>
+                        </div>
+                    </div>
+
+                    <div class="glass-card p-4 rounded-xl flex items-center gap-4">
+                        <div class="p-3 rounded-lg bg-zinc-900 text-indigo-400">
+                            <i data-lucide="scale" class="w-5 h-5"></i>
+                        </div>
+                        <div>
+                            <span class="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider block">Average Size</span>
+                            <span class="text-xs font-semibold text-white font-mono" id="footer-avg-size">0.0 shares</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB: TRADES HISTORY -->
+            <div id="tab-trades" class="tab-content hidden space-y-6">
+                <div class="glass-card p-6 rounded-xl flex flex-col min-h-[500px]">
+                    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+                        <div>
+                            <h3 class="font-outfit font-bold text-lg text-white">Trades History</h3>
+                            <p class="text-xs text-zinc-500">Historical records of all bot activity</p>
+                        </div>
+                        <!-- Search and Filter Panel -->
+                        <div class="flex flex-wrap items-center gap-3">
+                            <div class="relative">
+                                <i data-lucide="search" class="absolute left-3 top-2.5 w-4 h-4 text-zinc-500"></i>
+                                <input type="text" id="search-history" placeholder="Search markets..." class="pl-9 pr-4 py-2 w-64 bg-zinc-900/50 border border-zinc-800 rounded-lg text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-brand-500 transition duration-150">
+                            </div>
+                            <select id="filter-status" class="px-4 py-2 bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-zinc-300 focus:outline-none focus:border-brand-500 transition duration-150">
+                                <option value="all">All Statuses</option>
+                                <option value="open">Open Positions</option>
+                                <option value="closed">Closed Positions</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Scrollable History Table -->
+                    <div class="flex-1 overflow-x-auto">
+                        <table class="w-full text-left border-collapse text-xs">
+                            <thead>
+                                <tr class="border-b border-zinc-800 text-zinc-500 uppercase tracking-wider text-[10px]">
+                                    <th class="py-3 px-4 font-semibold">Trade ID</th>
+                                    <th class="py-3 px-4 font-semibold">Time</th>
+                                    <th class="py-3 px-4 font-semibold">Market Description</th>
+                                    <th class="py-3 px-4 font-semibold text-center">Side</th>
+                                    <th class="py-3 px-4 font-semibold text-right">Shares</th>
+                                    <th class="py-3 px-4 font-semibold text-right">Entry Price</th>
+                                    <th class="py-3 px-4 font-semibold text-right">BTC at Entry</th>
+                                    <th class="py-3 px-4 font-semibold text-right">Strike Price</th>
+                                    <th class="py-3 px-4 font-semibold text-right">Exit Price</th>
+                                    <th class="py-3 px-4 font-semibold text-right">PnL</th>
+                                    <th class="py-3 px-4 font-semibold text-center">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="history-trades-body" class="divide-y divide-zinc-900">
+                                <!-- Dynamic entries -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB: ANALYTICS -->
+            <div id="tab-analytics" class="tab-content hidden space-y-8">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <!-- Cumulative Profit Chart -->
+                    <div class="glass-card p-6 rounded-xl">
+                        <h3 class="font-outfit font-bold text-base text-white mb-4">Total Yield (All Trades)</h3>
+                        <div class="w-full h-72" id="analytics-yield-chart"></div>
+                    </div>
+                    <!-- Trade Holds Histogram / P&L Distribution -->
+                    <div class="glass-card p-6 rounded-xl">
+                        <h3 class="font-outfit font-bold text-base text-white mb-4">P&L Range Distribution</h3>
+                        <div class="w-full h-72" id="analytics-dist-chart"></div>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="glass-card p-6 rounded-xl">
+                        <h4 class="text-xs font-semibold text-zinc-500 uppercase tracking-wider block">Win Streak</h4>
+                        <div class="font-outfit font-bold text-4xl text-emerald-450 mt-2" id="analytics-streak">0 trades</div>
+                        <p class="text-xs text-zinc-600 mt-2">Active winning run</p>
+                    </div>
+                    <div class="glass-card p-6 rounded-xl">
+                        <h4 class="text-xs font-semibold text-zinc-500 uppercase tracking-wider block">Avg Win Size</h4>
+                        <div class="font-outfit font-bold text-4xl text-white mt-2" id="analytics-avg-win">+$0.00</div>
+                        <p class="text-xs text-zinc-600 mt-2">Mean profit per win trade</p>
+                    </div>
+                    <div class="glass-card p-6 rounded-xl">
+                        <h4 class="text-xs font-semibold text-zinc-500 uppercase tracking-wider block">Avg Loss Size</h4>
+                        <div class="font-outfit font-bold text-4xl text-white mt-2" id="analytics-avg-loss">-$0.00</div>
+                        <p class="text-xs text-zinc-600 mt-2">Mean loss per losing trade</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB: SETTINGS -->
+            <div id="tab-settings" class="tab-content hidden space-y-6">
+                <div class="glass-card p-6 rounded-xl max-w-3xl">
+                    <h3 class="font-outfit font-bold text-lg text-white mb-2">Bot Settings Configuration</h3>
+                    <p class="text-xs text-zinc-500 mb-6">Read-only configurations retrieved from active bot session environment.</p>
+                    
+                    <div class="space-y-4">
+                        <div class="grid grid-cols-3 gap-4 border-b border-zinc-800/60 pb-3">
+                            <span class="text-xs text-zinc-400 font-medium">Daily Snipe Limit</span>
+                            <span class="text-xs text-white col-span-2 font-mono" id="setting-limit">500 trades</span>
+                        </div>
+                        <div class="grid grid-cols-3 gap-4 border-b border-zinc-800/60 pb-3">
+                            <span class="text-xs text-zinc-400 font-medium">Trading Limit Per Snipe</span>
+                            <span class="text-xs text-white col-span-2 font-mono" id="setting-trade-size">1.00 USDC</span>
+                        </div>
+                        <div class="grid grid-cols-3 gap-4 border-b border-zinc-800/60 pb-3">
+                            <span class="text-xs text-zinc-400 font-medium">Execution Snipe Window</span>
+                            <span class="text-xs text-white col-span-2 font-mono" id="setting-window">Final 10 seconds before expiry</span>
+                        </div>
+                        <div class="grid grid-cols-3 gap-4 border-b border-zinc-800/60 pb-3">
+                            <span class="text-xs text-zinc-400 font-medium">Polymarket Proxy Address</span>
+                            <span class="text-xs text-white col-span-2 font-mono select-all truncate" id="setting-proxy">N/A</span>
+                        </div>
+                        <div class="grid grid-cols-3 gap-4 border-b border-zinc-800/60 pb-3">
+                            <span class="text-xs text-zinc-400 font-medium">Telegram Alert Channel</span>
+                            <span class="text-xs text-emerald-450 col-span-2 font-medium" id="setting-telegram">Connected</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <!-- MAIN DASHBOARD LOGIC -->
+    <script>
+        // Store current tab
+        let currentTab = 'dashboard';
+        let allTrades = [];
+        let performanceChartInstance = null;
+        let winLossChartInstance = null;
+        let sideChartInstance = null;
+        let yieldChartInstance = null;
+        let distChartInstance = null;
+
+        // Start function
+        document.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+            fetchData();
+            // Start regular interval polling
+            setInterval(fetchData, 5000);
+        });
+
+        // Tab switcher
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('.sidebar-item').forEach(el => el.classList.remove('active'));
+            
+            document.getElementById(`tab-${tabId}`).classList.remove('hidden');
+            document.getElementById(`nav-${tabId}`).classList.add('active');
+            
+            currentTab = tabId;
+            renderTabCharts();
+        }
+
+        // Render charts based on active tab to prevent rendering issues on hidden elements
+        function renderTabCharts() {
+            if (currentTab === 'dashboard') {
+                renderDashboardCharts();
+            } else if (currentTab === 'analytics') {
+                renderAnalyticsCharts();
+            }
+        }
+
+        // Fetch data from API
+        async function fetchData() {
+            try {
+                // Fetch stats
+                const statsResponse = await fetch('/api/stats');
+                const stats = await statsResponse.json();
+                
+                // Fetch status
+                const statusResponse = await fetch('/status');
+                const botStatus = await statusResponse.json();
+                
+                // Fetch trades
+                const tradesResponse = await fetch('/api/trades');
+                allTrades = await tradesResponse.json();
+                
+                // Update header
+                document.getElementById('header-mode').innerText = botStatus.paperMode ? 'PAPER MODE' : 'LIVE MODE';
+                document.getElementById('header-status').innerHTML = botStatus.botEnabled 
+                    ? '<span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> 🟢 Online' 
+                    : '<span class="w-2 h-2 rounded-full bg-rose-500"></span> 🔴 Offline';
+                
+                // Update stats cards
+                const pnlElement = document.getElementById('card-pnl');
+                pnlElement.innerText = `${stats.totalPnL >= 0 ? '+' : ''}$${stats.totalPnL.toFixed(2)}`;
+                if (stats.totalPnL >= 0) {
+                    pnlElement.className = 'font-outfit font-bold text-3xl text-emerald-400';
+                } else {
+                    pnlElement.className = 'font-outfit font-bold text-3xl text-rose-400';
+                }
+                
+                // Calculate PnL percentage trend based on paper initial balance (e.g. 10000)
+                const initialBal = 10000;
+                const pnlPercentage = (stats.totalPnL / initialBal) * 100;
+                const trendElement = document.getElementById('card-pnl-trend');
+                trendElement.innerHTML = `${pnlPercentage >= 0 ? '<i data-lucide="arrow-up-right" class="w-3.5 h-3.5 mr-0.5"></i>+' : '<i data-lucide="arrow-down-right" class="w-3.5 h-3.5 mr-0.5"></i>'}${pnlPercentage.toFixed(2)}%`;
+                trendElement.className = pnlPercentage >= 0 ? 'text-xs font-semibold text-emerald-400 flex items-center' : 'text-xs font-semibold text-rose-400 flex items-center';
+
+                document.getElementById('card-winrate').innerText = `${stats.winRate.toFixed(1)}%`;
+                document.getElementById('card-trades-today').innerText = stats.tradesToday;
+                document.getElementById('card-balance').innerText = `$${stats.balance.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+
+                // Update settings fields
+                document.getElementById('setting-limit').innerText = `${botStatus.botEnabled ? 'Active' : 'Paused'} (${stats.tradesToday} / ${botStatus.paperMode ? 500 : 500} daily cap)`;
+                document.getElementById('setting-trade-size').innerText = `1.00 USDC`;
+                document.getElementById('setting-proxy').innerText = botStatus.paperMode ? 'N/A (Paper Account)' : 'Active Proxy';
+
+                // Update quick stats footer
+                document.getElementById('footer-top-market').innerText = stats.topMarket;
+                document.getElementById('footer-best-trade').innerText = `+$${stats.bestTrade.toFixed(2)}`;
+                document.getElementById('footer-worst-trade').innerText = `${stats.worstTrade < 0 ? '-' : ''}$${Math.abs(stats.worstTrade).toFixed(2)}`;
+                document.getElementById('footer-avg-size').innerText = `${stats.avgTradeSize.toFixed(1)} shares`;
+                document.getElementById('stat-avg-pnl').innerText = `${stats.avgPnL >= 0 ? '+' : ''}$${stats.avgPnL.toFixed(2)}`;
+
+                // Update tables
+                updateTables(allTrades);
+                
+                // Re-render charts
+                renderTabCharts();
+                lucide.createIcons();
+            } catch (err) {
+                console.error("Error fetching data:", err);
+            }
+        }
+
+        // Update tables DOM
+        function updateTables(trades) {
+            // Recent trades (limit to 6)
+            const recentBody = document.getElementById('recent-trades-body');
+            recentBody.innerHTML = '';
+            
+            const recentTrades = trades.slice(0, 6);
+            if (recentTrades.length === 0) {
+                recentBody.innerHTML = '<tr><td colspan="7" class="py-8 text-center text-zinc-500">No recent trades found. Waiting for executions...</td></tr>';
+            } else {
+                recentTrades.forEach(t => {
+                    const row = document.createElement('tr');
+                    row.className = 'hover:bg-zinc-900/30 transition duration-150';
+                    
+                    const time = new Date(t.entry_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                    const pnlClass = t.pnl > 0 ? 'text-emerald-400 font-semibold font-mono' : (t.pnl < 0 ? 'text-rose-400 font-semibold font-mono' : 'text-zinc-500 font-mono');
+                    const pnlStr = t.status === 'open' ? '-' : `${t.pnl >= 0 ? '+' : ''}$${t.pnl.toFixed(2)}`;
+                    
+                    let statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-500/10 text-amber-500 border border-amber-500/20">🟡 Open</span>';
+                    if (t.status === 'closed') {
+                        statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">✅ Settled</span>';
+                    }
+
+                    row.innerHTML = `
+                        <td class="py-3 px-4 font-mono text-zinc-400">${time}</td>
+                        <td class="py-3 px-4 font-medium text-white truncate max-w-[200px] hover:text-brand-300 transition cursor-help" title="${t.question}">${t.question}</td>
+                        <td class="py-3 px-4 text-center">
+                            <span class="${t.side === 'YES' ? 'text-brand-400 bg-brand-400/10 border-brand-400/20' : 'text-zinc-400 bg-zinc-400/10 border-zinc-400/20'} px-2 py-0.5 border rounded text-[10px] font-bold">${t.side}</span>
+                        </td>
+                        <td class="py-3 px-4 text-right text-zinc-300 font-mono">$${t.entry_price.toFixed(2)}</td>
+                        <td class="py-3 px-4 text-right text-zinc-300 font-mono">$${t.strike_price ? t.strike_price.toLocaleString() : 'N/A'}</td>
+                        <td class="py-3 px-4 text-right ${pnlClass}">	extStr</td>
+                        <td class="py-3 px-4 text-center">${statusBadge}</td>
+                    `.replace('textStr', pnlStr);
+                    
+                    recentBody.appendChild(row);
+                });
+            }
+
+            // History tab
+            const historyBody = document.getElementById('history-trades-body');
+            const searchVal = document.getElementById('search-history').value.toLowerCase();
+            const statusFilter = document.getElementById('filter-status').value;
+            
+            historyBody.innerHTML = '';
+            
+            const filteredTrades = trades.filter(t => {
+                const matchesSearch = t.question.toLowerCase().includes(searchVal);
+                const matchesStatus = statusFilter === 'all' || t.status === statusFilter;
+                return matchesSearch && matchesStatus;
+            });
+
+            if (filteredTrades.length === 0) {
+                historyBody.innerHTML = '<tr><td colspan="11" class="py-12 text-center text-zinc-500">No matching historical records found.</td></tr>';
+            } else {
+                filteredTrades.forEach(t => {
+                    const row = document.createElement('tr');
+                    row.className = 'hover:bg-zinc-900/30 transition duration-150';
+                    
+                    const time = new Date(t.entry_time).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' });
+                    const pnlClass = t.pnl > 0 ? 'text-emerald-400 font-semibold font-mono' : (t.pnl < 0 ? 'text-rose-400 font-semibold font-mono' : 'text-zinc-500 font-mono');
+                    const pnlStr = t.status === 'open' ? '-' : `${t.pnl >= 0 ? '+' : ''}$${t.pnl.toFixed(2)}`;
+                    
+                    let statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-500/10 text-amber-500 border border-amber-500/20">🟡 Open</span>';
+                    if (t.status === 'closed') {
+                        statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">✅ Settled</span>';
+                    }
+
+                    row.innerHTML = `
+                        <td class="py-3 px-4 font-mono text-zinc-500">#${t.id}</td>
+                        <td class="py-3 px-4 font-mono text-zinc-400">${time}</td>
+                        <td class="py-3 px-4 font-medium text-white truncate max-w-[250px]">${t.question}</td>
+                        <td class="py-3 px-4 text-center">
+                            <span class="${t.side === 'YES' ? 'text-brand-400 bg-brand-400/10 border-brand-400/20' : 'text-zinc-400 bg-zinc-400/10 border-zinc-400/20'} px-2 py-0.5 border rounded text-[10px] font-bold">${t.side}</span>
+                        </td>
+                        <td class="py-3 px-4 text-right text-zinc-300 font-mono">${t.shares}</td>
+                        <td class="py-3 px-4 text-right text-zinc-300 font-mono">$${t.entry_price.toFixed(2)}</td>
+                        <td class="py-3 px-4 text-right text-zinc-400 font-mono">$${t.btc_price ? t.btc_price.toLocaleString() : 'N/A'}</td>
+                        <td class="py-3 px-4 text-right text-zinc-300 font-mono">$${t.strike_price ? t.strike_price.toLocaleString() : 'N/A'}</td>
+                        <td class="py-3 px-4 text-right text-zinc-300 font-mono">${t.exit_price ? '$' + t.exit_price.toFixed(2) : '-'}</td>
+                        <td class="py-3 px-4 text-right 	extClass">	extStr</td>
+                        <td class="py-3 px-4 text-center">${statusBadge}</td>
+                    `.replace('textClass', pnlClass).replace('textStr', pnlStr);
+                    
+                    historyBody.appendChild(row);
+                });
+            }
+        }
+
+        // Hook search history filter
+        document.getElementById('search-history').addEventListener('input', () => updateTables(allTrades));
+        document.getElementById('filter-status').addEventListener('change', () => updateTables(allTrades));
+
+        // Generate Chart Options
+        function renderDashboardCharts() {
+            // Process trades data to show progression
+            const closedTrades = allTrades.filter(t => t.status === 'closed').reverse();
+            let cumulativePnL = 0;
+            const pnlData = [];
+            const labels = [];
+            
+            // Limit to last 30 closed trades
+            const recentClosed = closedTrades.slice(-30);
+            
+            recentClosed.forEach((t, i) => {
+                cumulativePnL += t.pnl;
+                pnlData.push(parseFloat(cumulativePnL.toFixed(2)));
+                labels.push(`Trade #${t.id}`);
+            });
+
+            // 1. Performance Spline Chart
+            const chartOptions = {
+                chart: {
+                    type: 'area',
+                    height: 320,
+                    toolbar: { show: false },
+                    background: 'transparent',
+                    foreColor: '#71717a'
+                },
+                series: [{
+                    name: 'Cumulative P&L',
+                    data: pnlData
+                }],
+                colors: ['#8b5cf6'],
+                stroke: {
+                    curve: 'smooth',
+                    width: 3
+                },
+                fill: {
+                    type: 'gradient',
+                    gradient: {
+                        shadeIntensity: 1,
+                        opacityFrom: 0.35,
+                        opacityTo: 0.02,
+                        stops: [0, 95, 100]
+                    }
+                },
+                grid: {
+                    borderColor: '#27272a',
+                    strokeDashArray: 4,
+                    padding: { left: 10, right: 10 }
+                },
+                xaxis: {
+                    categories: labels,
+                    axisBorder: { show: false },
+                    axisTicks: { show: false }
+                },
+                yaxis: {
+                    labels: {
+                        formatter: function (value) {
+                            return (value >= 0 ? '+' : '') + '$' + value.toFixed(2);
+                        }
+                    }
+                },
+                tooltip: {
+                    theme: 'dark',
+                    y: {
+                        formatter: function (value) {
+                            return (value >= 0 ? '+' : '') + '$' + value.toFixed(2) + ' USDC';
+                        }
+                    }
+                }
+            };
+
+            if (performanceChartInstance) {
+                performanceChartInstance.updateOptions(chartOptions);
+            } else {
+                performanceChartInstance = new ApexCharts(document.querySelector("#performance-chart"), chartOptions);
+                performanceChartInstance.render();
+            }
+
+            // Stats computations for line chart header
+            if (closedTrades.length > 0) {
+                const pnls = closedTrades.map(t => t.pnl);
+                const best = Math.max(...pnls);
+                const worst = Math.min(...pnls);
+                const avg = pnls.reduce((a, b) => a + b, 0) / pnls.length;
+                document.getElementById('chart-best').innerText = `+$${best.toFixed(2)}`;
+                document.getElementById('chart-worst').innerText = `${worst < 0 ? '-' : ''}$${Math.abs(worst).toFixed(2)}`;
+                document.getElementById('chart-avg').innerText = `${avg >= 0 ? '+' : ''}$${avg.toFixed(2)}`;
+            }
+
+            // 2. Win / Loss Donut
+            const winTrades = closedTrades.filter(t => t.pnl > 0).length;
+            const lossTrades = closedTrades.filter(t => t.pnl <= 0).length;
+
+            const winLossOptions = {
+                chart: { type: 'donut', height: 160, background: 'transparent' },
+                series: [winTrades || 0, lossTrades || 0],
+                labels: ['Wins', 'Losses'],
+                colors: ['#10b981', '#f43f5e'],
+                dataLabels: { enabled: false },
+                legend: { show: false },
+                plotOptions: {
+                    pie: {
+                        donut: {
+                            size: '75%',
+                            background: 'transparent',
+                            labels: {
+                                show: true,
+                                name: { show: true, fontSize: '10px', color: '#71717a', offsetY: -5 },
+                                value: { show: true, fontSize: '14px', color: '#ffffff', offsetY: 5, formatter: val => val },
+                                total: {
+                                    show: true,
+                                    label: 'Win Rate',
+                                    fontSize: '9px',
+                                    color: '#71717a',
+                                    formatter: function (w) {
+                                        const total = w.globals.seriesTotals.reduce((a, b) => a + b, 0);
+                                        const rate = total > 0 ? (w.globals.series[0] / total) * 100 : 0;
+                                        return rate.toFixed(1) + '%';
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                tooltip: { theme: 'dark' }
+            };
+
+            if (winLossChartInstance) {
+                winLossChartInstance.updateOptions(winLossOptions);
+            } else {
+                winLossChartInstance = new ApexCharts(document.querySelector("#win-loss-donut"), winLossOptions);
+                winLossChartInstance.render();
+            }
+
+            // 3. Side Donut (YES vs NO)
+            const yesTrades = allTrades.filter(t => t.side === 'YES').length;
+            const noTrades = allTrades.filter(t => t.side === 'NO').length;
+
+            const sideOptions = {
+                chart: { type: 'donut', height: 160, background: 'transparent' },
+                series: [yesTrades || 0, noTrades || 0],
+                labels: ['YES', 'NO'],
+                colors: ['#8b5cf6', '#71717a'],
+                dataLabels: { enabled: false },
+                legend: { show: false },
+                plotOptions: {
+                    pie: {
+                        donut: {
+                            size: '75%',
+                            labels: {
+                                show: true,
+                                name: { show: true, fontSize: '10px', color: '#71717a', offsetY: -5 },
+                                value: { show: true, fontSize: '14px', color: '#ffffff', offsetY: 5, formatter: val => val },
+                                total: {
+                                    show: true,
+                                    label: 'YES Bias',
+                                    fontSize: '9px',
+                                    color: '#71717a',
+                                    formatter: function (w) {
+                                        const total = w.globals.seriesTotals.reduce((a, b) => a + b, 0);
+                                        const rate = total > 0 ? (w.globals.series[0] / total) * 100 : 0;
+                                        return rate.toFixed(0) + '%';
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                tooltip: { theme: 'dark' }
+            };
+
+            if (sideChartInstance) {
+                sideChartInstance.updateOptions(sideOptions);
+            } else {
+                sideChartInstance = new ApexCharts(document.querySelector("#side-donut"), sideOptions);
+                sideChartInstance.render();
+            }
+        }
+
+        function renderAnalyticsCharts() {
+            const closedTrades = allTrades.filter(t => t.status === 'closed').reverse();
+            
+            // Cumulative Profit (Yield Chart)
+            let runningSum = 0;
+            const progression = closedTrades.map(t => {
+                runningSum += t.pnl;
+                return parseFloat(runningSum.toFixed(2));
+            });
+            const tradeNumbers = closedTrades.map((t, idx) => `Trade #${t.id}`);
+
+            const yieldOptions = {
+                chart: { type: 'line', height: 280, toolbar: { show: false }, background: 'transparent', foreColor: '#71717a' },
+                series: [{ name: 'Cumulative P&L', data: progression }],
+                colors: ['#10b981'],
+                stroke: { curve: 'smooth', width: 3 },
+                grid: { borderColor: '#27272a', strokeDashArray: 4 },
+                xaxis: { categories: tradeNumbers, axisBorder: { show: false }, axisTicks: { show: false } },
+                yaxis: { labels: { formatter: val => '$' + val.toFixed(2) } },
+                tooltip: { theme: 'dark' }
+            };
+
+            if (yieldChartInstance) {
+                yieldChartInstance.updateOptions(yieldOptions);
+            } else {
+                yieldChartInstance = new ApexCharts(document.querySelector("#analytics-yield-chart"), yieldOptions);
+                yieldChartInstance.render();
+            }
+
+            // Streak computation
+            let activeStreak = 0;
+            for (let i = closedTrades.length - 1; i >= 0; i--) {
+                if (closedTrades[i].pnl > 0) {
+                    activeStreak++;
+                } else {
+                    break;
+                }
+            }
+            document.getElementById('analytics-streak').innerText = `${activeStreak} trades`;
+
+            // Win/Loss average sizes
+            const wins = closedTrades.filter(t => t.pnl > 0).map(t => t.pnl);
+            const losses = closedTrades.filter(t => t.pnl <= 0).map(t => t.pnl);
+            
+            const avgWin = wins.length > 0 ? wins.reduce((a,b)=>a+b, 0)/wins.length : 0;
+            const avgLoss = losses.length > 0 ? losses.reduce((a,b)=>a+b, 0)/losses.length : 0;
+
+            document.getElementById('analytics-avg-win').innerText = `+$${avgWin.toFixed(2)}`;
+            document.getElementById('analytics-avg-loss').innerText = `${avgLoss < 0 ? '-' : ''}$${Math.abs(avgLoss).toFixed(2)}`;
+
+            // PnL range distribution
+            // Group by buckets: <-$0.50, -$0.50 to $0, $0 to $0.50, >$0.50
+            const buckets = [0, 0, 0, 0];
+            closedTrades.forEach(t => {
+                if (t.pnl < -0.2) buckets[0]++;
+                else if (t.pnl >= -0.2 && t.pnl <= 0) buckets[1]++;
+                else if (t.pnl > 0 && t.pnl <= 0.2) buckets[2]++;
+                else if (t.pnl > 0.2) buckets[3]++;
+            });
+
+            const distOptions = {
+                chart: { type: 'bar', height: 280, toolbar: { show: false }, background: 'transparent', foreColor: '#71717a' },
+                series: [{ name: 'Count', data: buckets }],
+                colors: ['#6366f1'],
+                plotOptions: {
+                    bar: {
+                        borderRadius: 4,
+                        horizontal: false,
+                        columnWidth: '55%',
+                    }
+                },
+                grid: { borderColor: '#27272a', strokeDashArray: 4 },
+                xaxis: {
+                    categories: ['<-$0.20', '-$0.20 to $0', '$0 to $0.20', '>$0.20'],
+                    axisBorder: { show: false },
+                    axisTicks: { show: false }
+                },
+                yaxis: { labels: { formatter: val => Math.round(val) } },
+                tooltip: { theme: 'dark' }
+            };
+
+            if (distChartInstance) {
+                distChartInstance.updateOptions(distOptions);
+            } else {
+                distChartInstance = new ApexCharts(document.querySelector("#analytics-dist-chart"), distOptions);
+                distChartInstance.render();
+            }
+        }
+    </script>
+
+</body>
+</html>

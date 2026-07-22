@@ -2,6 +2,7 @@ import express from 'express';
 import axios from 'axios';
 import * as dotenv from 'dotenv';
 import mongoose from 'mongoose';
+import path from 'path';
 import logger from './src/logger';
 import { PolymarketService } from './src/polymarket';
 import { TelegramService } from './src/telegram';
@@ -160,8 +161,82 @@ bootstrap().catch(err => {
 
 // --- Health Check Server ---
 const app = express();
+app.use(express.static(path.join(__dirname, 'public')));
+
 app.get('/health', (req, res) => {
   res.status(200).send('✅ Bot is awake and running!');
+});
+
+app.get('/api/trades', (req, res) => {
+  try {
+    if (paperTrader) {
+      res.json(paperTrader.getRecentTrades(100));
+    } else {
+      res.json([]);
+    }
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/stats', (req, res) => {
+  try {
+    if (paperTrader) {
+      const stats = paperTrader.getStats();
+      const recent = paperTrader.getRecentTrades(100);
+      
+      const closed = recent.filter((t: any) => t.status === 'closed');
+      const wins = closed.filter((t: any) => t.pnl > 0).length;
+      const losses = closed.filter((t: any) => t.pnl <= 0).length;
+      
+      const yesTrades = recent.filter((t: any) => t.side === 'YES').length;
+      const noTrades = recent.filter((t: any) => t.side === 'NO').length;
+      
+      const avgPnL = closed.length > 0 ? stats.totalPnL / closed.length : 0;
+      
+      let topMarket = 'N/A';
+      let bestTrade = 0;
+      let worstTrade = 0;
+      let totalShares = 0;
+      
+      if (recent.length > 0) {
+        const marketCounts: { [key: string]: number } = {};
+        recent.forEach((t: any) => {
+          marketCounts[t.question] = (marketCounts[t.question] || 0) + 1;
+          if (t.status === 'closed') {
+            if (t.pnl > bestTrade) bestTrade = t.pnl;
+            if (t.pnl < worstTrade) worstTrade = t.pnl;
+          }
+          totalShares += t.shares || 0;
+        });
+        
+        let maxCount = 0;
+        for (const m in marketCounts) {
+          if (marketCounts[m] > maxCount) {
+            maxCount = marketCounts[m];
+            topMarket = m;
+          }
+        }
+      }
+      
+      const avgTradeSize = recent.length > 0 ? totalShares / recent.length : 0;
+      
+      res.json({
+        ...stats,
+        winLossDist: { wins, losses },
+        sideDist: { yes: yesTrades, no: noTrades },
+        avgPnL,
+        topMarket,
+        bestTrade,
+        worstTrade,
+        avgTradeSize
+      });
+    } else {
+      res.status(500).json({ error: 'Paper trader not initialized' });
+    }
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 app.get('/status', async (req, res) => {
@@ -189,11 +264,7 @@ app.get('/status', async (req, res) => {
 });
 
 app.get('/', (req, res) => {
-  if (initError) {
-    res.status(500).send(`<h1>Configuration Error</h1><p>${initError}</p><p>Please ensure you have set the correct <b>POLYGON_PRIVATE_KEY</b> and <b>PROXY_ADDRESS</b> in the Settings panel.</p>`);
-  } else {
-    res.send('<h1>Polymarket Headless Bot</h1><p>Bot is active and listening for Telegram commands. Use /health for pinging.</p>');
-  }
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 const PORT = parseInt(process.env.PORT || "3000");
