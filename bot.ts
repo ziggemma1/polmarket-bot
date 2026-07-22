@@ -161,7 +161,7 @@ bootstrap().catch(err => {
 
 // --- Health Check Server ---
 const app = express();
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(process.cwd(), 'public')));
 
 app.get('/health', (req, res) => {
   res.status(200).send('✅ Bot is awake and running!');
@@ -264,7 +264,7 @@ app.get('/status', async (req, res) => {
 });
 
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  res.sendFile(path.join(process.cwd(), 'public', 'index.html'));
 });
 
 const PORT = parseInt(process.env.PORT || "3000");
