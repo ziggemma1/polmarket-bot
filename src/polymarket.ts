@@ -102,8 +102,6 @@ export class PolymarketService {
           return isBTC5Min && isExpiringSoon && m.active && !m.closed;
         })
         .map((m: any) => {
-          const cleanText = (m.title || m.question || '').replace(/,/g, '');
-          const strikeMatch = cleanText.match(/(\d+\.?\d*)/);
           let tokens: string[] = [];
           try {
             tokens = typeof m.clobTokenIds === 'string' ? JSON.parse(m.clobTokenIds) : (m.clobTokenIds || []);
@@ -116,7 +114,7 @@ export class PolymarketService {
             question: m.title || m.question,
             description: m.description,
             endDate: m.endDate,
-            strikePrice: strikeMatch ? parseFloat(strikeMatch[0]) : 0,
+            strikePrice: 0,
             yesTokenId: tokens[0],
             noTokenId: tokens[1]
           };

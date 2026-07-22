@@ -51,10 +51,6 @@ export async function getCurrentBTCMarket() {
               tokens = market.tokens?.map((t: any) => t.tokenId) || [];
             }
             
-            // Attempt to find strike price in title if applicable, though for btc-updown it's based on start price
-            const cleanText = (market.title || market.question || '').replace(/,/g, '');
-            const strikeMatch = cleanText.match(/(\d+\.?\d*)/);
-
             return {
                 id: market.id.toString(),
                 question: market.question || market.title || 'Unknown',
@@ -67,7 +63,7 @@ export async function getCurrentBTCMarket() {
                 volume: market.volume || 0,
                 yesTokenId: tokens[0] || '',
                 noTokenId: tokens[1] || '',
-                strikePrice: strikeMatch ? parseFloat(strikeMatch[0]) : 0
+                strikePrice: 0
             };
         } else {
             // The market likely exists on-chain but hasn't been indexed by Gamma yet.

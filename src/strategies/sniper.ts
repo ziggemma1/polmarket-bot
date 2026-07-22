@@ -210,8 +210,34 @@ async function executeSnipe(market: any): Promise<{
         const btcPrice = parseFloat(coinbaseData.data.amount);
         console.log(`[Sniper] BTC Price from Coinbase: $${btcPrice}`);
 
-        // 2. Use the parsed strike price from the market
-        const strikePrice = market.strikePrice || 66000;
+        // 2. Fetch the strike price (open price of the 5m candle) from Coinbase Exchange API
+        let strikePrice = 0;
+        try {
+            const startTimestamp = parseInt(market.slug.split('-').pop() || '0');
+            if (startTimestamp > 0) {
+                const cbResponse = await fetch('https://api.exchange.coinbase.com/products/BTC-USD/candles?granularity=300', {
+                    headers: { 'User-Agent': 'polmarket-bot' }
+                });
+                const klines = await cbResponse.json();
+                if (Array.isArray(klines) && klines.length > 0) {
+                    const candle = klines.find((k: any) => k[0] === startTimestamp);
+                    if (candle) {
+                        strikePrice = parseFloat(candle[3]); // Index 3 is open price
+                        console.log(`[Sniper] Found Coinbase candle for start timestamp ${startTimestamp}. Open price (strikePrice): $${strikePrice}`);
+                    } else {
+                        // Fallback to the newest candle's open price
+                        strikePrice = parseFloat(klines[0][3]);
+                        console.log(`[Sniper] Start timestamp ${startTimestamp} not found in recent Coinbase candles. Using latest candle open price: $${strikePrice}`);
+                    }
+                }
+            }
+        } catch (e: any) {
+            console.log(`[Sniper] Could not fetch strike price from Coinbase candles: ${e.message}. Using fallback.`);
+        }
+
+        if (!strikePrice) {
+            strikePrice = btcPrice || 66000;
+        }
         console.log(`[Sniper] Final Strike Price: $${strikePrice}`);
 
         // 3. Determine winning side
