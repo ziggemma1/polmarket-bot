@@ -87,6 +87,7 @@ export class PaperTrader {
         entryPrice: number;
         btcPrice?: number;
         strikePrice?: number;
+        expiryTime?: string;
     }): Promise<{ success: boolean; trade?: any; error?: string }> {
         try {
             const cost = params.shares * params.entryPrice;
@@ -115,6 +116,7 @@ export class PaperTrader {
                 strike_price: params.strikePrice,
                 status: 'open',
                 entry_time: now,
+                expiry_time: params.expiryTime,
                 pnl: 0
             };
 

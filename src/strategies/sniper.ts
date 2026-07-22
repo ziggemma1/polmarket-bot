@@ -32,7 +32,7 @@ const CHECK_INTERVAL = 2000; // 2 seconds
 const SNIPE_WINDOW = 10;
 
 
-async function syncClosedPositions() {
+async function settleExpiredPositions() {
     try {
         if (!config) return;
         const paperTrader = await getPaperTrader();
@@ -42,39 +42,74 @@ async function syncClosedPositions() {
             return;
         }
 
-        console.log(`[Sniper] Checking ${openPositions.length} open paper positions against Polymarket Gamma API...`);
+        const now = Date.now();
+        const expired = openPositions.filter(pos => pos.expiry_time && now >= new Date(pos.expiry_time).getTime());
 
-        await paperTrader.syncPositions(
-            async (id: string) => {
-                return await config!.polymarketService.getMarket(id);
-            },
-            (position: any, exitPrice: number, pnl: number) => {
-                const outcome = exitPrice > 0 ? '✅ WIN' : '❌ LOSS';
-                console.log(`[Sniper] On-chain check: ${outcome} Position ${position.id} closed: PnL = ${pnl.toFixed(2)}`);
+        if (expired.length === 0) {
+            return;
+        }
+
+        console.log(`[Sniper] Found ${expired.length} expired paper positions. Fetching BTC price from Coinbase for instant settlement...`);
+
+        let btcPrice: number | null = null;
+        try {
+            const response = await fetch('https://api.coinbase.com/v2/prices/BTC-USD/spot');
+            const data = await response.json();
+            btcPrice = parseFloat(data.data.amount);
+            console.log(`[Sniper] Expiry BTC Price from Coinbase: $${btcPrice}`);
+        } catch (err) {
+            console.error('[Sniper] Failed to fetch BTC price for instant settlement:', err);
+        }
+
+        for (const position of expired) {
+            console.log(`[Sniper] 🔄 Settling expired position ${position.id} instantly...`);
+
+            let exitPrice = 0.00;
+            let outcome = '❌ LOSS';
+
+            if (btcPrice !== null) {
+                const strikePrice = position.strike_price || 66000;
+                if (position.side === 'YES' && btcPrice > strikePrice) {
+                    exitPrice = 1.00;
+                    outcome = '✅ WIN';
+                } else if (position.side === 'NO' && btcPrice < strikePrice) {
+                    exitPrice = 1.00;
+                    outcome = '✅ WIN';
+                }
+            } else {
+                console.log(`[Sniper] BTC price is null, default to LOSS for position ${position.id}`);
+            }
+
+            const result = await paperTrader.closePosition(position.id, exitPrice);
+            if (result.success) {
+                const pnl = result.pnl || 0;
+                console.log(`[Sniper] Instant check: ${outcome} Position ${position.id} closed: PnL = ${pnl.toFixed(2)}`);
                 
-                if (config?.telegramService) {
+                if (config.telegramService) {
                     config.telegramService.sendAlert(
-                        `📊 PAPER: Position Settled\n` +
+                        `📊 PAPER: Position Settled (Instant)\n` +
                         `Market: ${position.question || 'Unknown'}\n` +
                         `Side: ${position.side}\n` +
                         `Result: ${outcome}\n` +
-                        `Entry Price: $${position.entry_price.toFixed(2)}\n` +
-                        `Exit Price: $${exitPrice.toFixed(2)}\n` +
+                        `BTC at Expiry: $${btcPrice ? btcPrice.toLocaleString() : 'N/A'}\n` +
+                        `Strike Price: $${position.strike_price ? position.strike_price.toLocaleString() : 'N/A'}\n` +
                         `PnL: $${pnl.toFixed(2)}`
                     );
                 }
+            } else {
+                console.error(`[Sniper] Failed to close expired position ${position.id}: ${result.error}`);
             }
-        );
+        }
     } catch (error) {
-        console.error('[Sniper] Error in syncClosedPositions:', error);
+        console.error('[Sniper] Error in settleExpiredPositions:', error);
     }
 }
 
 async function tick() {
     try {
-        await syncClosedPositions();
+        await settleExpiredPositions();
     } catch (error) {
-        console.error('[Sniper] Error in syncClosedPositions:', error);
+        console.error('[Sniper] Error in settleExpiredPositions:', error);
     }
     if (!sniperActive) {
         setTimeout(tick, CHECK_INTERVAL);
@@ -202,6 +237,7 @@ async function executeSnipe(market: any): Promise<{
                 entryPrice: entryPrice,
                 btcPrice: btcPrice,
                 strikePrice: strikePrice,
+                expiryTime: market.endDate,
             });
 
             if (result.success) {
