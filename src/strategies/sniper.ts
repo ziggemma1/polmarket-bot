@@ -221,7 +221,10 @@ async function executeSnipe(market: any, ticker: 'btc' | 'eth' | 'sol' | 'xrp'):
         // 1. Fetch spot price from Coinbase
         const coinbaseResponse = await fetch(`https://api.coinbase.com/v2/prices/${ticker.toUpperCase()}-USD/spot`);
         const coinbaseData = await coinbaseResponse.json();
-        const priceValue = parseFloat(coinbaseData.data.amount);
+        const priceValue = parseFloat(coinbaseData?.data?.amount);
+        if (!priceValue || isNaN(priceValue)) {
+            return { success: false, error: `Could not fetch spot price for ${ticker.toUpperCase()}` };
+        }
         console.log(`[Sniper] ${ticker.toUpperCase()} Price from Coinbase: $${priceValue}`);
 
         // 2. Fetch the strike price (open price of the 5m candle) from Coinbase Exchange API
@@ -238,19 +241,15 @@ async function executeSnipe(market: any, ticker: 'btc' | 'eth' | 'sol' | 'xrp'):
                     if (candle) {
                         strikePrice = parseFloat(candle[3]); // Index 3 is open price
                         console.log(`[Sniper] Found Coinbase candle for ${ticker.toUpperCase()} start timestamp ${startTimestamp}. Open price (strikePrice): $${strikePrice}`);
-                    } else {
-                        // Fallback to the newest candle's open price
-                        strikePrice = parseFloat(klines[0][3]);
-                        console.log(`[Sniper] Start timestamp ${startTimestamp} not found in recent Coinbase candles. Using latest candle open price: $${strikePrice}`);
                     }
                 }
             }
         } catch (e: any) {
-            console.log(`[Sniper] Could not fetch strike price from Coinbase candles: ${e.message}. Using fallback.`);
+            console.log(`[Sniper] Could not fetch strike price from Coinbase candles: ${e.message}`);
         }
 
-        if (!strikePrice) {
-            strikePrice = priceValue || (ticker === 'btc' ? 66000 : (ticker === 'eth' ? 3500 : (ticker === 'sol' ? 150 : 0.50)));
+        if (!strikePrice || isNaN(strikePrice)) {
+            return { success: false, error: `Could not fetch candle strike price for ${ticker.toUpperCase()}` };
         }
         console.log(`[Sniper] Final Strike Price: $${strikePrice}`);
 
