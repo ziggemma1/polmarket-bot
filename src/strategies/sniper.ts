@@ -13,8 +13,13 @@ export interface SniperConfig {
 }
 let config: SniperConfig | null = null;
 
+let tickRunning = false;
 export function initSniper(cfg: SniperConfig) {
   config = cfg;
+  if (!tickRunning) {
+    tickRunning = true;
+    setTimeout(tick, 1000);
+  }
 }
 
 let sniperActive = false;
@@ -111,15 +116,14 @@ async function closeExpiredTrades() {
 }
 
 async function tick() {
-    if (!sniperActive) {
-        setTimeout(tick, CHECK_INTERVAL);
-        return;
-    }
-
     try {
         await closeExpiredTrades();
     } catch (error) {
         console.error('[Sniper] Error in closeExpiredTrades:', error);
+    }
+    if (!sniperActive) {
+        setTimeout(tick, CHECK_INTERVAL);
+        return;
     }
 
     if (!sniperActive) { // Need to re-check after async
@@ -271,7 +275,7 @@ export function startSniper() {
     tradesToday = 0;
     consecutiveLosses = 0;
     console.log('[Sniper] 🟢 Started');
-    setTimeout(tick, 1000);
+    // tick is already running from initSniper
 }
 
 export function stopSniper() {

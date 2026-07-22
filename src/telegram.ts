@@ -1,4 +1,6 @@
-import TelegramBot from 'node-telegram-bot-api';
+import TelegramBotModule from 'node-telegram-bot-api';
+type TelegramBot = any; // fallback type
+const TelegramBot = (TelegramBotModule as any).default || TelegramBotModule;
 import logger from './logger';
 import { BotState, Trade } from './types';
 
