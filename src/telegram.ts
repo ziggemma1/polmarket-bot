@@ -46,8 +46,8 @@ export class TelegramService {
           [{ text: '/start' }, { text: '/status' }],
           [{ text: '/snipes on' }, { text: '/snipes off' }],
           [{ text: '/paper on' }, { text: '/paper off' }],
-          [{ text: '/paper balance' }, { text: '/balance' }],
           [{ text: '/markets' }, { text: '/recent' }],
+          [{ text: '/close all' }, { text: '/paper balance' }],
           [{ text: '/help' }]
         ],
         resize_keyboard: true,
