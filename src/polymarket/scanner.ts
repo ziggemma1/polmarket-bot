@@ -3,11 +3,7 @@ import logger from '../logger';
 
 const GAMMA_API = 'https://gamma-api.polymarket.com';
 
-/**
- * Calculates the exact slug for the current BTC 5-minute market
- * based on the current UTC time rounded down to the nearest 5 minutes.
- */
-function getCurrentBTC5mSlug(): string {
+function getCurrent5mSlug(ticker: 'btc' | 'eth'): string {
     const now = new Date();
     
     // Get UTC components
@@ -26,22 +22,21 @@ function getCurrentBTC5mSlug(): string {
     // Convert to Unix timestamp (seconds since epoch)
     const unixTimestamp = Math.floor(flooredDate.getTime() / 1000);
     
-    return `btc-updown-5m-${unixTimestamp}`;
+    return `${ticker}-updown-5m-${unixTimestamp}`;
 }
 
-export async function getCurrentBTCMarket() {
-    const slug = getCurrentBTC5mSlug();
-    logger.info(`[Scanner] Target slug: ${slug}`);
+export async function getCurrentMarket(ticker: 'btc' | 'eth') {
+    const slug = getCurrent5mSlug(ticker);
+    logger.info(`[Scanner] Target ${ticker.toUpperCase()} slug: ${slug}`);
 
     try {
         // Query the specific market by its exact slug
-        // This bypasses the Gamma API indexing delay
         const url = `${GAMMA_API}/markets?slug=${slug}`;
         const response = await axios.get(url);
 
         if (response.data && response.data.length > 0) {
             const market = response.data[0];
-            logger.info(`[Scanner] ✅ Market found: ${market.question}`);
+            logger.info(`[Scanner] ✅ ${ticker.toUpperCase()} Market found: ${market.question}`);
             
             // Extract tokens correctly
             let tokens: string[] = [];
@@ -66,14 +61,21 @@ export async function getCurrentBTCMarket() {
                 strikePrice: 0
             };
         } else {
-            // The market likely exists on-chain but hasn't been indexed by Gamma yet.
-            logger.info(`[Scanner] ⚠️ Market not yet indexed by Gamma. Waiting for next cycle...`);
+            logger.info(`[Scanner] ⚠️ ${ticker.toUpperCase()} Market not yet indexed by Gamma. Waiting for next cycle...`);
             return null;
         }
     } catch (error: any) {
-        logger.error(`[Scanner] Error fetching market: ${error.message}`);
+        logger.error(`[Scanner] Error fetching ${ticker.toUpperCase()} market: ${error.message}`);
         return null;
     }
+}
+
+export async function getCurrentBTCMarket() {
+    return getCurrentMarket('btc');
+}
+
+export async function getCurrentETHMarket() {
+    return getCurrentMarket('eth');
 }
 
 export async function getUpcomingBTCMarkets() {
