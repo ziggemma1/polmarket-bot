@@ -10,6 +10,7 @@ export interface SniperConfig {
   polymarketService: any; // The PolymarketService instance
   telegramService: any;
   tradingLimit: number;
+  maxDailyTrades: number; // Configured via environment variable
 }
 let config: SniperConfig | null = null;
 
@@ -29,7 +30,6 @@ let consecutiveLosses = 0;
 
 const CHECK_INTERVAL = 2000; // 2 seconds
 const SNIPE_WINDOW = 10;
-const MAX_DAILY_TRADES = 4;
 
 
 async function closeExpiredTrades() {
@@ -133,11 +133,12 @@ async function tick() {
 
     try {
         // Check daily limit
-        if (tradesToday >= MAX_DAILY_TRADES) {
+        const limit = config?.maxDailyTrades || 500;
+        if (tradesToday >= limit) {
             console.log(`[Sniper] Daily limit reached. Pausing.`);
             sniperActive = false;
             if (config?.telegramService) {
-                config.telegramService.sendAlert(`⛔ Daily limit reached (${MAX_DAILY_TRADES} trades). Sniper paused.`);
+                config.telegramService.sendAlert(`⛔ Daily limit reached (${limit} trades). Sniper paused.`);
             }
             setTimeout(tick, CHECK_INTERVAL);
             return;
@@ -219,45 +220,78 @@ async function executeSnipe(market: any): Promise<{
         const btcPrice = parseFloat(binanceData.price);
         console.log(`[Sniper] BTC Price: $${btcPrice}`);
 
-        // 2. Extract strike price from market question
-        // The market object should have a 'strikePrice' property or we parse it
-        // For now, use the market's 'price' or 'strikePrice'
-        const strikePrice = market.strikePrice || market.price || 66000; // Fallback
-        console.log(`[Sniper] Strike Price: $${strikePrice}`);
+        // 2. Fetch the opening price of the current 5-minute candle as the strike price
+        let strikePrice = 66000; // default fallback
+        try {
+            const klineResponse = await fetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=5m&limit=1');
+            const klines = await klineResponse.json();
+            if (klines && klines.length > 0) {
+                strikePrice = parseFloat(klines[0][1]); // Index 1 is the open price of the candle
+                console.log(`[Sniper] Binance 5m candle open price (strikePrice): $${strikePrice}`);
+            } else {
+                throw new Error('Empty kline response');
+            }
+        } catch (e: any) {
+            console.log(`[Sniper] Could not fetch BTC 5m open price: ${e.message}. Using fallback.`);
+            strikePrice = market.strikePrice || market.price || 66000;
+        }
+        console.log(`[Sniper] Final Strike Price: $${strikePrice}`);
 
         // 3. Determine winning side
         const side = btcPrice > strikePrice ? 'YES' : 'NO';
         console.log(`[Sniper] ${side} is winning (BTC $${btcPrice} vs strike $${strikePrice})`);
 
-        // 4. Get the PaperTrader instance
-        const paperTrader = await getPaperTrader();
-        if (!paperTrader) {
-            return { success: false, error: 'Paper trader not initialized' };
-        }
+        // 4. Determine trade execution parameters
+        const entryPrice = 0.97;
+        const tradingLimit = config?.tradingLimit || 1.00;
+        const shares = Math.floor(tradingLimit / entryPrice) || 1;
 
         // 5. Execute the trade
-        const shares = 1; // Minimum shares
-        const entryPrice = 0.97;
-        const result = await paperTrader.executeTrade({
-            marketId: market.id,
-            question: market.question,
-            side: side,
-            shares: shares,
-            entryPrice: entryPrice,
-            btcPrice: btcPrice,
-            strikePrice: strikePrice,
-        });
-
-        if (result.success) {
-            return {
-                success: true,
+        if (config?.paperMode) {
+            const paperTrader = await getPaperTrader();
+            if (!paperTrader) {
+                return { success: false, error: 'Paper trader not initialized' };
+            }
+            const result = await paperTrader.executeTrade({
+                marketId: market.id,
+                question: market.question,
                 side: side,
-                price: entryPrice,
                 shares: shares,
+                entryPrice: entryPrice,
                 btcPrice: btcPrice,
-            };
+                strikePrice: strikePrice,
+            });
+
+            if (result.success) {
+                return {
+                    success: true,
+                    side: side,
+                    price: entryPrice,
+                    shares: shares,
+                    btcPrice: btcPrice,
+                };
+            } else {
+                return { success: false, error: result.error || 'Paper trade failed' };
+            }
         } else {
-            return { success: false, error: result.error || 'Trade failed' };
+            // Live Trading!
+            if (!config?.polymarketService) {
+                return { success: false, error: 'Polymarket Service not initialized for Live mode' };
+            }
+            const cost = shares * entryPrice;
+            const result = await config.polymarketService.placeSnipe(market, side, entryPrice, cost);
+
+            if (result) {
+                return {
+                    success: true,
+                    side: side,
+                    price: entryPrice,
+                    shares: shares,
+                    btcPrice: btcPrice,
+                };
+            } else {
+                return { success: false, error: 'Live trade placement failed' };
+            }
         }
 
     } catch (error) {

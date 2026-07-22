@@ -99,6 +99,8 @@ async function bootstrap() {
       },
       paperTrader
     );
+  } else {
+    logger.warn('⚠️ TELEGRAM_BOT_TOKEN or TELEGRAM_USER_ID is missing in environment variables. Telegram Service and Sniper loop will not start.');
   }
 
   // --- Background Sync Loop ---
@@ -132,7 +134,8 @@ async function bootstrap() {
       paperTrader,
       polymarketService: polymarket,
       telegramService: telegram,
-      tradingLimit: parseFloat(TRADING_LIMIT_PER_TRADE)
+      tradingLimit: parseFloat(TRADING_LIMIT_PER_TRADE),
+      maxDailyTrades: parseInt(MAX_DAILY_TRADES)
     });
   }
 }
