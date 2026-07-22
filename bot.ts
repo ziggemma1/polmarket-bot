@@ -187,3 +187,4 @@ const server = app.listen(PORT, '0.0.0.0', () => {
 server.on('error', (err) => {
   logger.error('Express server error:', err);
 });
+// UI Sync

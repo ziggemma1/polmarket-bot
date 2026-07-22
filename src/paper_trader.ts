@@ -283,3 +283,4 @@ export class PaperTrader {
 export async function getPaperTrader(): Promise<PaperTrader> {
     return await PaperTrader.getInstance();
 }
+// UI Sync

@@ -333,3 +333,4 @@ export class TelegramService {
     this.bot.sendMessage(this.whitelist, message, { parse_mode: 'Markdown' });
   }
 }
+// UI Sync

@@ -285,3 +285,4 @@ export function getSniperStatus() {
         tradesToday: tradesToday,
     };
 }
+// UI Sync
