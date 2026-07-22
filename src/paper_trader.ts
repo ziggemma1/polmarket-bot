@@ -182,7 +182,10 @@ export class PaperTrader {
         }
     }
     
-    async syncPositions(fetchMarket: (id: string) => Promise<any>) {
+    async syncPositions(
+        fetchMarket: (id: string) => Promise<any>,
+        onPositionClosed?: (position: any, exitPrice: number, pnl: number) => void
+    ) {
         for (const pos of [...this.positions]) {
             try {
                 const market = await fetchMarket(pos.marketId);
@@ -198,7 +201,10 @@ export class PaperTrader {
                         exitPrice = noPrice;
                     }
                     
-                    await this.closePosition(pos.id, exitPrice);
+                    const result = await this.closePosition(pos.id, exitPrice);
+                    if (result.success && onPositionClosed) {
+                        onPositionClosed(pos, exitPrice, result.pnl || 0);
+                    }
                 }
             } catch (err) {
                 console.error(`Error syncing paper position ${pos.marketId}:`, err);

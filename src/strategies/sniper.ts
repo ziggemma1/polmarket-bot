@@ -32,8 +32,9 @@ const CHECK_INTERVAL = 2000; // 2 seconds
 const SNIPE_WINDOW = 10;
 
 
-async function closeExpiredTrades() {
+async function syncClosedPositions() {
     try {
+        if (!config) return;
         const paperTrader = await getPaperTrader();
         const openPositions = paperTrader.getOpenPositions();
 
@@ -41,85 +42,39 @@ async function closeExpiredTrades() {
             return;
         }
 
-        console.log(`[Sniper] Checking ${openPositions.length} open positions for expiry...`);
+        console.log(`[Sniper] Checking ${openPositions.length} open paper positions against Polymarket Gamma API...`);
 
-        let btcPrice: number | null = null;
-        try {
-            const binanceResponse = await fetch('https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT');
-            const binanceData = await binanceResponse.json();
-            btcPrice = parseFloat(binanceData.price);
-        } catch (e) {
-            console.log('[Sniper] Could not fetch BTC price for closing');
-        }
-
-        let closedCount = 0;
-
-        for (const position of openPositions) {
-            const entryTime = new Date(position.entry_time);
-            const expiryTime = new Date(entryTime.getTime() + 5 * 60 * 1000);
-            const now = new Date();
-            const secondsSinceExpiry = (now.getTime() - expiryTime.getTime()) / 1000;
-
-            if (secondsSinceExpiry > 5) {
-                console.log(`[Sniper] 🔄 Closing position ${position.id} (expired ${Math.round(secondsSinceExpiry)}s ago)`);
-
-                let exitPrice = 0;
-                let outcome = 'LOSS';
-
-                if (btcPrice !== null) {
-                    const strikePrice = position.strike_price || 66000;
-                    if (position.side === 'YES' && btcPrice > strikePrice) {
-                        exitPrice = 1.00;
-                        outcome = '✅ WIN';
-                    } else if (position.side === 'NO' && btcPrice < strikePrice) {
-                        exitPrice = 1.00;
-                        outcome = '✅ WIN';
-                    } else {
-                        exitPrice = 0.00;
-                        outcome = '❌ LOSS';
-                    }
-                } else {
-                    exitPrice = 0.00;
-                    outcome = '❌ LOSS (no BTC price)';
-                }
-
-                const result = await paperTrader.closePosition(position.id, exitPrice);
+        await paperTrader.syncPositions(
+            async (id: string) => {
+                return await config!.polymarketService.getMarket(id);
+            },
+            (position: any, exitPrice: number, pnl: number) => {
+                const outcome = exitPrice > 0 ? '✅ WIN' : '❌ LOSS';
+                console.log(`[Sniper] On-chain check: ${outcome} Position ${position.id} closed: PnL = ${pnl.toFixed(2)}`);
                 
-                if (result.success) {
-                    closedCount++;
-                    const pnl = result.pnl || 0;
-                    console.log(`[Sniper] ${outcome} Position ${position.id} closed: PnL = ${pnl.toFixed(2)}`);
-                    
-                    if (config?.telegramService) {
-                        config.telegramService.sendAlert(
-                            `${outcome} Position Closed\n` +
-                            `Market: ${position.question || 'Unknown'}\n` +
-                            `Side: ${position.side}\n` +
-                            `Entry: ${position.entry_price}\n` +
-                            `Exit: ${exitPrice.toFixed(2)}\n` +
-                            `PnL: ${pnl.toFixed(2)}`
-                        );
-                    }
-                } else {
-                    console.log(`[Sniper] ❌ Failed to close position ${position.id}: ${result.error}`);
+                if (config?.telegramService) {
+                    config.telegramService.sendAlert(
+                        `📊 PAPER: Position Settled\n` +
+                        `Market: ${position.question || 'Unknown'}\n` +
+                        `Side: ${position.side}\n` +
+                        `Result: ${outcome}\n` +
+                        `Entry Price: $${position.entry_price.toFixed(2)}\n` +
+                        `Exit Price: $${exitPrice.toFixed(2)}\n` +
+                        `PnL: $${pnl.toFixed(2)}`
+                    );
                 }
             }
-        }
-
-        if (closedCount > 0) {
-            console.log(`[Sniper] Closed ${closedCount} positions.`);
-        }
-
+        );
     } catch (error) {
-        console.error('[Sniper] Error closing expired trades:', error);
+        console.error('[Sniper] Error in syncClosedPositions:', error);
     }
 }
 
 async function tick() {
     try {
-        await closeExpiredTrades();
+        await syncClosedPositions();
     } catch (error) {
-        console.error('[Sniper] Error in closeExpiredTrades:', error);
+        console.error('[Sniper] Error in syncClosedPositions:', error);
     }
     if (!sniperActive) {
         setTimeout(tick, CHECK_INTERVAL);
@@ -214,27 +169,14 @@ async function executeSnipe(market: any): Promise<{
     error?: string;
 }> {
     try {
-        // 1. Fetch BTC price from Binance
-        const binanceResponse = await fetch('https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT');
-        const binanceData = await binanceResponse.json();
-        const btcPrice = parseFloat(binanceData.price);
-        console.log(`[Sniper] BTC Price: $${btcPrice}`);
+        // 1. Fetch BTC price from Coinbase
+        const coinbaseResponse = await fetch('https://api.coinbase.com/v2/prices/BTC-USD/spot');
+        const coinbaseData = await coinbaseResponse.json();
+        const btcPrice = parseFloat(coinbaseData.data.amount);
+        console.log(`[Sniper] BTC Price from Coinbase: $${btcPrice}`);
 
-        // 2. Fetch the opening price of the current 5-minute candle as the strike price
-        let strikePrice = 66000; // default fallback
-        try {
-            const klineResponse = await fetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=5m&limit=1');
-            const klines = await klineResponse.json();
-            if (klines && klines.length > 0) {
-                strikePrice = parseFloat(klines[0][1]); // Index 1 is the open price of the candle
-                console.log(`[Sniper] Binance 5m candle open price (strikePrice): $${strikePrice}`);
-            } else {
-                throw new Error('Empty kline response');
-            }
-        } catch (e: any) {
-            console.log(`[Sniper] Could not fetch BTC 5m open price: ${e.message}. Using fallback.`);
-            strikePrice = market.strikePrice || market.price || 66000;
-        }
+        // 2. Use the parsed strike price from the market
+        const strikePrice = market.strikePrice || 66000;
         console.log(`[Sniper] Final Strike Price: $${strikePrice}`);
 
         // 3. Determine winning side

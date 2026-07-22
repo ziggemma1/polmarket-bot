@@ -52,7 +52,8 @@ export async function getCurrentBTCMarket() {
             }
             
             // Attempt to find strike price in title if applicable, though for btc-updown it's based on start price
-            const strikeMatch = (market.title || market.question || '').match(/(\d+\.?\d*)/);
+            const cleanText = (market.title || market.question || '').replace(/,/g, '');
+            const strikeMatch = cleanText.match(/(\d+\.?\d*)/);
 
             return {
                 id: market.id.toString(),
