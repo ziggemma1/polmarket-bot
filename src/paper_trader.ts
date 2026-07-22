@@ -71,6 +71,14 @@ export class PaperTrader {
         console.log(`[PaperTrader] Loaded ${this.trades.length} trades, ${this.positions.length} open positions`);
     }
 
+    getOpenPositions() {
+        return this.positions.filter(p => p.status === 'open');
+    }
+
+    getPositionById(id: number) {
+        return this.positions.find(p => p.id === id);
+    }
+
     async executeTrade(params: {
         marketId: string;
         question?: string;
@@ -78,6 +86,7 @@ export class PaperTrader {
         shares: number;
         entryPrice: number;
         btcPrice?: number;
+        strikePrice?: number;
     }): Promise<{ success: boolean; trade?: any; error?: string }> {
         try {
             const cost = params.shares * params.entryPrice;
@@ -103,6 +112,7 @@ export class PaperTrader {
                 shares: params.shares,
                 entry_price: params.entryPrice,
                 btc_price: params.btcPrice,
+                strike_price: params.strikePrice,
                 status: 'open',
                 entry_time: now,
                 pnl: 0
