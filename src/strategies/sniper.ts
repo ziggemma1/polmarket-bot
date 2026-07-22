@@ -232,7 +232,7 @@ async function executeSnipe(market: any): Promise<{
         }
 
         // 5. Execute the trade
-        const shares = 5; // Minimum shares
+        const shares = 1; // Minimum shares
         const entryPrice = 0.97;
         const result = await paperTrader.executeTrade({
             marketId: market.id,
