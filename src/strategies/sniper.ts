@@ -52,8 +52,8 @@ async function settleExpiredPositions() {
         console.log(`[Sniper] Found ${expired.length} expired paper positions. Resolving outcomes...`);
 
         // Cache prices to avoid multiple fetches for the same ticker
-        const priceCache: { [key: string]: number | null } = { btc: null, eth: null };
-        const getPrice = async (t: 'btc' | 'eth') => {
+        const priceCache: { [key: string]: number | null } = { btc: null, eth: null, sol: null, xrp: null };
+        const getPrice = async (t: 'btc' | 'eth' | 'sol' | 'xrp') => {
             if (priceCache[t] !== null) return priceCache[t];
             try {
                 const response = await fetch(`https://api.coinbase.com/v2/prices/${t.toUpperCase()}-USD/spot`);
@@ -71,7 +71,17 @@ async function settleExpiredPositions() {
         for (const position of expired) {
             console.log(`[Sniper] 🔄 Settling expired position ${position.id} instantly...`);
 
-            const ticker = (position.question || '').toLowerCase().includes('ethereum') ? 'eth' : 'btc';
+            // Parse ticker from question text
+            let ticker: 'btc' | 'eth' | 'sol' | 'xrp' = 'btc';
+            const q = (position.question || '').toLowerCase();
+            if (q.includes('ethereum')) {
+                ticker = 'eth';
+            } else if (q.includes('solana')) {
+                ticker = 'sol';
+            } else if (q.includes('xrp')) {
+                ticker = 'xrp';
+            }
+
             const price = await getPrice(ticker);
 
             let exitPrice = 0.00;
@@ -126,6 +136,11 @@ async function tick() {
         return;
     }
 
+    if (!sniperActive) { // Need to re-check after async
+        setTimeout(tick, CHECK_INTERVAL);
+        return;
+    }
+
     try {
         // Check daily limit
         const limit = config?.maxDailyTrades || 500;
@@ -144,8 +159,8 @@ async function tick() {
             executedMarketIds.clear();
         }
 
-        // Scan both BTC and ETH markets
-        const tickers: ('btc' | 'eth')[] = ['btc', 'eth'];
+        // Scan BTC, ETH, SOL, and XRP markets in parallel
+        const tickers: ('btc' | 'eth' | 'sol' | 'xrp')[] = ['btc', 'eth', 'sol', 'xrp'];
         for (const ticker of tickers) {
             const market = await getCurrentMarket(ticker);
             if (!market) continue;
@@ -194,7 +209,7 @@ async function tick() {
     setTimeout(tick, CHECK_INTERVAL);
 }
 
-async function executeSnipe(market: any, ticker: 'btc' | 'eth'): Promise<{ 
+async function executeSnipe(market: any, ticker: 'btc' | 'eth' | 'sol' | 'xrp'): Promise<{ 
     success: boolean; 
     side?: string; 
     price?: number; 
@@ -235,7 +250,7 @@ async function executeSnipe(market: any, ticker: 'btc' | 'eth'): Promise<{
         }
 
         if (!strikePrice) {
-            strikePrice = priceValue || (ticker === 'btc' ? 66000 : 3500);
+            strikePrice = priceValue || (ticker === 'btc' ? 66000 : (ticker === 'eth' ? 3500 : (ticker === 'sol' ? 150 : 0.50)));
         }
         console.log(`[Sniper] Final Strike Price: $${strikePrice}`);
 
