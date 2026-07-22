@@ -1,12 +1,7 @@
 import path from 'path';
 import fs from 'fs';
+import { TradeModel, PaperStateModel } from './models/trade';
 
-const logsDir = path.join(process.cwd(), 'logs');
-if (!fs.existsSync(logsDir)) {
-    fs.mkdirSync(logsDir, { recursive: true });
-}
-
-const DB_PATH = process.env.PAPER_DB_PATH || path.join(logsDir, 'paper_trades.json');
 const INITIAL_BALANCE = parseFloat(process.env.PAPER_INITIAL_BALANCE || '10000');
 
 let instance: PaperTrader | null = null;
@@ -31,44 +26,41 @@ export class PaperTrader {
     async init() {
         if (this.initialized) return;
 
-        // Load existing trades from JSON
+        // Load existing trades from MongoDB
         await this.loadTrades();
         this.initialized = true;
         console.log(`[PaperTrader] Initialized with balance: $${this.balance}`);
     }
 
     private saveState() {
-        try {
-            const data = {
-                balance: this.balance,
-                trades: this.trades,
-                positions: this.positions,
-                nextTradeId: this.nextTradeId
-            };
-            fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
-        } catch (err) {
-            console.error('Failed to save paper state:', err);
-        }
+        // Obsolete for MongoDB as we save changes asynchronously immediately upon execution/settlement.
     }
 
     private async loadTrades() {
         try {
-            if (fs.existsSync(DB_PATH)) {
-                const data = JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
-                this.balance = data.balance ?? INITIAL_BALANCE;
-                this.trades = data.trades ?? [];
-                this.positions = data.positions ?? [];
-                this.nextTradeId = data.nextTradeId ?? 1;
-            } else {
-                this.balance = INITIAL_BALANCE;
-                this.saveState();
+            // Fetch/create PaperState
+            let stateDoc = await PaperStateModel.findOne().exec();
+            if (!stateDoc) {
+                stateDoc = await PaperStateModel.create({ balance: INITIAL_BALANCE });
             }
-        } catch (err) {
-            console.error('Failed to load paper state:', err);
-            this.balance = INITIAL_BALANCE;
-        }
+            this.balance = stateDoc.balance ?? INITIAL_BALANCE;
 
-        console.log(`[PaperTrader] Loaded ${this.trades.length} trades, ${this.positions.length} open positions`);
+            // Load trades and positions
+            this.trades = await TradeModel.find().exec();
+            this.positions = this.trades.filter(t => t.status === 'open');
+
+            // Find nextTradeId
+            const lastTrade = await TradeModel.findOne().sort({ id: -1 }).exec();
+            this.nextTradeId = lastTrade ? lastTrade.id + 1 : 1;
+
+            console.log(`[PaperTrader] Loaded state from MongoDB. Balance: $${this.balance}, Trades: ${this.trades.length}, Positions: ${this.positions.length}`);
+        } catch (err) {
+            console.error('Failed to load state from MongoDB:', err);
+            this.balance = INITIAL_BALANCE;
+            this.trades = [];
+            this.positions = [];
+            this.nextTradeId = 1;
+        }
     }
 
     getOpenPositions() {
@@ -114,7 +106,7 @@ export class PaperTrader {
                 entry_price: params.entryPrice,
                 btc_price: params.btcPrice,
                 strike_price: params.strikePrice,
-                status: 'open',
+                status: 'open' as 'open' | 'closed',
                 entry_time: now,
                 expiry_time: params.expiryTime,
                 pnl: 0
@@ -122,7 +114,14 @@ export class PaperTrader {
 
             this.positions.push(trade);
             this.trades.push(trade);
-            this.saveState();
+
+            // Write to MongoDB asynchronously (non-blocking)
+            PaperStateModel.updateOne({}, { $set: { balance: this.balance } }).catch(err => {
+                console.error('[PaperTrader] Failed to save balance to MongoDB:', err);
+            });
+            TradeModel.create(trade).catch(err => {
+                console.error('[PaperTrader] Failed to save trade to MongoDB:', err);
+            });
 
             console.log(`[PaperTrader] ✅ Trade recorded: ${params.side} at $${params.entryPrice}`);
             console.log(`[PaperTrader] 💰 New balance: $${this.balance.toFixed(2)}`);
@@ -165,13 +164,26 @@ export class PaperTrader {
             // Remove from positions
             this.positions.splice(tradeIndex, 1);
             
-            // Note: The trade is already in this.trades (by reference if pushed together, or we can update it)
+            // Update in trades history
             const mainTradeIndex = this.trades.findIndex(p => p.id === tradeId);
             if (mainTradeIndex !== -1) {
                 this.trades[mainTradeIndex] = { ...trade };
             }
-            
-            this.saveState();
+
+            // Write to MongoDB asynchronously (non-blocking)
+            PaperStateModel.updateOne({}, { $set: { balance: this.balance } }).catch(err => {
+                console.error('[PaperTrader] Failed to save balance to MongoDB:', err);
+            });
+            TradeModel.updateOne({ id: tradeId }, {
+                $set: {
+                    status: 'closed',
+                    exit_price: exitPrice,
+                    pnl: pnl,
+                    exit_time: now
+                }
+            }).catch(err => {
+                console.error('[PaperTrader] Failed to update trade in MongoDB:', err);
+            });
 
             console.log(`[PaperTrader] 📊 Trade ${tradeId} closed: PnL = $${pnl.toFixed(2)}`);
             console.log(`[PaperTrader] 💰 New balance: $${this.balance.toFixed(2)}`);
@@ -256,7 +268,15 @@ export class PaperTrader {
         this.positions = [];
         this.trades = [];
         this.nextTradeId = 1;
-        this.saveState();
+
+        // Reset in MongoDB asynchronously
+        PaperStateModel.updateOne({}, { $set: { balance: INITIAL_BALANCE } }).catch(err => {
+            console.error('[PaperTrader] Failed to reset balance in MongoDB:', err);
+        });
+        TradeModel.deleteMany({}).catch(err => {
+            console.error('[PaperTrader] Failed to clear trades in MongoDB:', err);
+        });
+
         console.log(`[PaperTrader] 🔄 Reset. Balance: $${this.balance}`);
     }
     
@@ -291,4 +311,5 @@ export class PaperTrader {
 export async function getPaperTrader(): Promise<PaperTrader> {
     return await PaperTrader.getInstance();
 }
+
 // UI Sync

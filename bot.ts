@@ -1,6 +1,7 @@
 import express from 'express';
 import axios from 'axios';
 import * as dotenv from 'dotenv';
+import mongoose from 'mongoose';
 import logger from './src/logger';
 import { PolymarketService } from './src/polymarket';
 import { TelegramService } from './src/telegram';
@@ -48,6 +49,19 @@ let initError: string | null = null;
 let paperTrader: any = null;
 
 async function bootstrap() {
+  const dbUrl = process.env.DATABASE_URL;
+  if (dbUrl) {
+    try {
+      logger.info('Connecting to MongoDB...');
+      await mongoose.connect(dbUrl);
+      logger.info('Connected to MongoDB successfully.');
+    } catch (err: any) {
+      logger.error('Failed to connect to MongoDB:', err);
+    }
+  } else {
+    logger.warn('DATABASE_URL is missing in environment variables. Running without MongoDB.');
+  }
+
   paperTrader = await getPaperTrader();
 
   if (PROXY_ADDRESS) {
