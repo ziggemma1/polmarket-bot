@@ -1,0 +1,8 @@
+{
+  "name": "Polymarket Arbitrage Bot",
+  "description": "Automated trading bot for Polymarket prediction markets, featuring endcycle sniper and arbitrage strategies.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
