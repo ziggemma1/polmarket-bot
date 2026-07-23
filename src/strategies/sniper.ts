@@ -187,13 +187,14 @@ async function tick() {
 
             // Execute snipe in final window
             if (secondsLeft <= SNIPE_WINDOW && secondsLeft > 0) {
+                // Mark immediately so the bot NEVER retries this market in the remaining seconds of this cycle
+                executedMarketIds.add(market.id);
                 console.log(`[Sniper] 🎯 Executing ${ticker.toUpperCase()} snipe at T-${secondsLeft}s`);
                 
                 const result = await executeSnipe(market, ticker);
                 
                 if (result.success) {
                     tradesToday++;
-                    executedMarketIds.add(market.id);
                     console.log(`[Sniper] ✅ ${ticker.toUpperCase()} Snipe executed. Trades today: ${tradesToday}`);
                     
                     // Send detailed Telegram alert
@@ -232,7 +233,14 @@ async function executeSnipe(market: any, ticker: 'btc' | 'eth' | 'sol' | 'bnb'):
     error?: string;
 }> {
     try {
-        // 1. Fetch spot price (Coinbase first, Binance fallback)
+        const cgMap: { [key: string]: string } = {
+            btc: 'bitcoin',
+            eth: 'ethereum',
+            sol: 'solana',
+            bnb: 'binancecoin'
+        };
+
+        // 1. Fetch spot price (Coinbase -> CoinGecko -> Binance Vision)
         let priceValue = 0;
         try {
             const coinbaseResponse = await fetch(`https://api.coinbase.com/v2/prices/${ticker.toUpperCase()}-USD/spot`);
@@ -242,7 +250,16 @@ async function executeSnipe(market: any, ticker: 'btc' | 'eth' | 'sol' | 'bnb'):
 
         if (!priceValue || isNaN(priceValue)) {
             try {
-                const binanceResponse = await fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${ticker.toUpperCase()}USDT`);
+                const cgId = cgMap[ticker] || ticker;
+                const cgRes = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${cgId}&vs_currencies=usd`);
+                const cgData = await cgRes.json();
+                priceValue = parseFloat(cgData?.[cgId]?.usd);
+            } catch (e) {}
+        }
+
+        if (!priceValue || isNaN(priceValue)) {
+            try {
+                const binanceResponse = await fetch(`https://data-api.binance.vision/api/v3/ticker/price?symbol=${ticker.toUpperCase()}USDT`);
                 const binanceData = await binanceResponse.json();
                 priceValue = parseFloat(binanceData?.price);
             } catch (e) {}
@@ -253,38 +270,41 @@ async function executeSnipe(market: any, ticker: 'btc' | 'eth' | 'sol' | 'bnb'):
         }
         console.log(`[Sniper] ${ticker.toUpperCase()} Spot Price: $${priceValue}`);
 
-        // 2. Fetch the strike price (open price of the 5m candle)
+        // 2. Fetch the strike price (open price of the 5m candle) from Binance Vision API (failsafe across all regions)
         let strikePrice = 0;
         const startTimestamp = parseInt(market.slug.split('-').pop() || '0');
         
-        // Try Coinbase Exchange candles first
         try {
             if (startTimestamp > 0) {
-                const cbResponse = await fetch(`https://api.exchange.coinbase.com/products/${ticker.toUpperCase()}-USD/candles?granularity=300`, {
-                    headers: { 'User-Agent': 'polmarket-bot' }
-                });
-                const klines = await cbResponse.json();
-                if (Array.isArray(klines) && klines.length > 0) {
-                    const candle = klines.find((k: any) => k[0] === startTimestamp);
+                const bvResponse = await fetch(`https://data-api.binance.vision/api/v3/klines?symbol=${ticker.toUpperCase()}USDT&interval=5m&limit=10`);
+                const bvKlines = await bvResponse.json();
+                if (Array.isArray(bvKlines)) {
+                    let candle = bvKlines.find((k: any) => Math.floor(k[0] / 1000) === startTimestamp);
+                    if (!candle && bvKlines.length > 0) {
+                        // Fallback to closest 5m open candle
+                        candle = bvKlines[bvKlines.length - 1];
+                    }
                     if (candle) {
-                        strikePrice = parseFloat(candle[3]); // Index 3 is open price
-                        console.log(`[Sniper] Found Coinbase candle for ${ticker.toUpperCase()} start timestamp ${startTimestamp}. Open price: $${strikePrice}`);
+                        strikePrice = parseFloat(candle[1]); // Index 1 is open price in Binance Vision klines
+                        console.log(`[Sniper] Found Binance Vision candle for ${ticker.toUpperCase()} start timestamp ${startTimestamp}. Open price: $${strikePrice}`);
                     }
                 }
             }
         } catch (e: any) {}
 
-        // Fallback to Binance klines if Coinbase strike price is missing
+        // Fallback to Coinbase Exchange candles for BTC/ETH/SOL if missing
         if (!strikePrice || isNaN(strikePrice)) {
             try {
                 if (startTimestamp > 0) {
-                    const binanceResponse = await fetch(`https://api.binance.com/api/v3/klines?symbol=${ticker.toUpperCase()}USDT&interval=5m&limit=10`);
-                    const binanceKlines = await binanceResponse.json();
-                    if (Array.isArray(binanceKlines)) {
-                        const candle = binanceKlines.find((k: any) => Math.floor(k[0] / 1000) === startTimestamp);
+                    const cbResponse = await fetch(`https://api.exchange.coinbase.com/products/${ticker.toUpperCase()}-USD/candles?granularity=300`, {
+                        headers: { 'User-Agent': 'polmarket-bot' }
+                    });
+                    const klines = await cbResponse.json();
+                    if (Array.isArray(klines) && klines.length > 0) {
+                        const candle = klines.find((k: any) => k[0] === startTimestamp);
                         if (candle) {
-                            strikePrice = parseFloat(candle[1]); // Index 1 is open price in Binance klines
-                            console.log(`[Sniper] Found Binance candle for ${ticker.toUpperCase()} start timestamp ${startTimestamp}. Open price: $${strikePrice}`);
+                            strikePrice = parseFloat(candle[3]); // Index 3 is open price
+                            console.log(`[Sniper] Found Coinbase candle for ${ticker.toUpperCase()} start timestamp ${startTimestamp}. Open price: $${strikePrice}`);
                         }
                     }
                 }
