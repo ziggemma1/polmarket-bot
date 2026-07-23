@@ -705,36 +705,37 @@
                 winRateGaugeInstance.render();
             }
 
-            // 2. Main P&L Progression Chart — per-crypto cumulative line chart
+            // 2. Main P&L Chart — per-crypto cumulative lines + individual win/loss scatter
             const now = new Date();
-            let startLimit = new Date();
-            let interval = 'day';
+            let windowStart = new Date();
+            let interval = '5min'; // default for daily
             
             if (timeFilter === 'daily') {
-                startLimit = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-                interval = 'hour';
+                windowStart = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+                interval = '5min';
             } else if (timeFilter === 'weekly') {
-                startLimit = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-                interval = 'day';
+                windowStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+                interval = 'hour';
             } else if (timeFilter === 'monthly') {
-                startLimit = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+                windowStart = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
                 interval = 'day';
             } else if (timeFilter === 'annually') {
-                startLimit = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+                windowStart = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
                 interval = 'month';
             } else if (timeFilter === 'custom') {
                 const csvStart = document.getElementById('custom-start-date').value;
                 const csvEnd = document.getElementById('custom-end-date').value;
-                if (csvStart) startLimit = new Date(csvStart + 'T00:00:00');
-                else startLimit = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+                if (csvStart) windowStart = new Date(csvStart + 'T00:00:00');
+                else windowStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
                 const cEnd = csvEnd ? new Date(csvEnd + 'T23:59:59') : new Date();
-                const diffDays = Math.ceil(Math.abs(cEnd - startLimit) / (1000 * 60 * 60 * 24));
-                if (diffDays <= 2) interval = 'hour';
+                const diffDays = Math.ceil(Math.abs(cEnd - windowStart) / (1000 * 60 * 60 * 24));
+                if (diffDays <= 1) interval = '5min';
+                else if (diffDays <= 7) interval = 'hour';
                 else if (diffDays <= 60) interval = 'day';
                 else interval = 'month';
             }
 
-            const chartEndLimit = (timeFilter === 'custom' && document.getElementById('custom-end-date').value)
+            const chartEnd = (timeFilter === 'custom' && document.getElementById('custom-end-date').value)
                 ? new Date(document.getElementById('custom-end-date').value + 'T23:59:59')
                 : new Date();
 
@@ -752,34 +753,54 @@
                 .filter(t => t.status === 'closed')
                 .sort((a, b) => new Date(a.entry_time).getTime() - new Date(b.entry_time).getTime());
 
+            // Trades in the filter window
+            const tradesInWindow = chronoClosed.filter(t => {
+                const et = new Date(t.entry_time);
+                return et >= windowStart && et <= chartEnd;
+            });
+
+            // Smart start: begin chart from first trade, not window start
+            const firstTradeTime = tradesInWindow.length > 0
+                ? new Date(tradesInWindow[0].entry_time)
+                : windowStart;
+            // Round down to nearest interval boundary
+            let chartStart = new Date(firstTradeTime);
+            if (interval === '5min') {
+                chartStart.setMinutes(Math.floor(chartStart.getMinutes() / 5) * 5, 0, 0);
+            } else if (interval === 'hour') {
+                chartStart.setMinutes(0, 0, 0);
+            } else if (interval === 'day') {
+                chartStart.setHours(0, 0, 0, 0);
+            } else {
+                chartStart.setDate(1); chartStart.setHours(0, 0, 0, 0);
+            }
+
             const assets = ['btc', 'eth', 'sol', 'xrp'];
             const assetColors = { btc: '#F04438', eth: '#0B192C', sol: '#12B76A', xrp: '#2E90FA' };
             const assetNames = { btc: 'Bitcoin', eth: 'Ethereum', sol: 'Solana', xrp: 'XRP' };
 
-            // Pre-compute initial cumulative P&L per asset (trades before the window)
-            const initialPnLByAsset = {};
+            // Initial cumulative P&L per asset (trades before chart start)
+            const initPnL = {};
             assets.forEach(a => {
-                initialPnLByAsset[a] = chronoClosed
-                    .filter(t => new Date(t.entry_time) < startLimit && detectAsset(t.question) === a)
+                initPnL[a] = chronoClosed
+                    .filter(t => new Date(t.entry_time) < chartStart && detectAsset(t.question) === a)
                     .reduce((acc, t) => acc + (t.pnl || 0), 0);
             });
 
-            // Trades in the visible window
-            const tradesInRange = chronoClosed.filter(t => {
-                const et = new Date(t.entry_time);
-                return et >= startLimit && et <= chartEndLimit;
-            });
-
-            // Build time slots
+            // Build time slots from chartStart to chartEnd
             const labels = [];
             const slotBounds = [];
-            const cursor = new Date(startLimit);
+            const cursor = new Date(chartStart);
             let iters = 0;
-            while (cursor <= chartEndLimit && iters < 500) {
+            const maxSlots = interval === '5min' ? 2000 : 500;
+            while (cursor <= chartEnd && iters < maxSlots) {
                 iters++;
                 const slotStart = new Date(cursor);
                 let label = '';
-                if (interval === 'hour') {
+                if (interval === '5min') {
+                    label = cursor.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    cursor.setMinutes(cursor.getMinutes() + 5);
+                } else if (interval === 'hour') {
                     label = cursor.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                     cursor.setHours(cursor.getHours() + 1);
                 } else if (interval === 'day') {
@@ -793,11 +814,11 @@
                 slotBounds.push({ start: slotStart, end: new Date(cursor) });
             }
 
-            // Build cumulative series per asset
-            const series = assets.map(asset => {
-                let running = initialPnLByAsset[asset];
+            // Build cumulative P&L series per asset
+            const cumulativeSeries = assets.map(asset => {
+                let running = initPnL[asset];
                 const data = slotBounds.map(slot => {
-                    const slotPnL = tradesInRange
+                    const slotPnL = tradesInWindow
                         .filter(t => detectAsset(t.question) === asset && new Date(t.entry_time) >= slot.start && new Date(t.entry_time) < slot.end)
                         .reduce((acc, t) => acc + (t.pnl || 0), 0);
                     running += slotPnL;
@@ -806,9 +827,35 @@
                 return { name: assetNames[asset], data };
             });
 
-            // Determine sensible tick density for x-axis
+            // Build Wins and Losses scatter series (show each individual trade)
+            const winsData = slotBounds.map((slot, idx) => {
+                const slotWins = tradesInWindow.filter(t =>
+                    new Date(t.entry_time) >= slot.start && new Date(t.entry_time) < slot.end && t.pnl > 0
+                );
+                if (slotWins.length === 0) return null;
+                return parseFloat(slotWins.reduce((a, t) => a + t.pnl, 0).toFixed(2));
+            });
+            const lossesData = slotBounds.map((slot, idx) => {
+                const slotLosses = tradesInWindow.filter(t =>
+                    new Date(t.entry_time) >= slot.start && new Date(t.entry_time) < slot.end && t.pnl <= 0
+                );
+                if (slotLosses.length === 0) return null;
+                return parseFloat(slotLosses.reduce((a, t) => a + t.pnl, 0).toFixed(2));
+            });
+
+            const allSeries = [
+                ...cumulativeSeries,
+                { name: 'Wins', data: winsData },
+                { name: 'Losses', data: lossesData }
+            ];
+
+            // Determine sensible tick density
             const totalLabels = labels.length;
-            let tickAmount = totalLabels <= 12 ? totalLabels : (totalLabels <= 31 ? 10 : 12);
+            let tickAmount;
+            if (totalLabels <= 12) tickAmount = totalLabels;
+            else if (totalLabels <= 30) tickAmount = 10;
+            else if (totalLabels <= 100) tickAmount = 15;
+            else tickAmount = 20;
 
             const mainChartOptions = {
                 chart: {
@@ -819,15 +866,20 @@
                     fontFamily: 'Plus Jakarta Sans',
                     zoom: { enabled: false }
                 },
-                series: series,
-                colors: assets.map(a => assetColors[a]),
+                series: allSeries,
+                colors: [
+                    assetColors.btc, assetColors.eth, assetColors.sol, assetColors.xrp,
+                    '#12B76A', '#F04438'
+                ],
                 stroke: {
                     curve: 'smooth',
-                    width: 2.5
+                    width: [2.5, 2.5, 2.5, 2.5, 0, 0]
                 },
                 markers: {
-                    size: 0,
-                    hover: { sizeOffset: 4 }
+                    size: [0, 0, 0, 0, 5, 5],
+                    strokeWidth: [0, 0, 0, 0, 0, 0],
+                    shape: ['circle', 'circle', 'circle', 'circle', 'circle', 'circle'],
+                    hover: { sizeOffset: 3 }
                 },
                 legend: {
                     show: true,
@@ -836,7 +888,7 @@
                     fontSize: '11px',
                     fontWeight: 600,
                     markers: { width: 8, height: 8, radius: 12 },
-                    itemMargin: { horizontal: 16 }
+                    itemMargin: { horizontal: 12 }
                 },
                 grid: {
                     borderColor: '#F2F4F7',
@@ -851,7 +903,7 @@
                     labels: {
                         show: true,
                         rotate: -45,
-                        rotateAlways: totalLabels > 14,
+                        rotateAlways: totalLabels > 20,
                         hideOverlappingLabels: true,
                         style: {
                             colors: '#98A2B3',
@@ -863,6 +915,7 @@
                 yaxis: {
                     labels: {
                         formatter: function (value) {
+                            if (value === null) return '';
                             return (value >= 0 ? '+' : '') + '$' + value.toFixed(2);
                         },
                         style: {
@@ -877,6 +930,7 @@
                     intersect: false,
                     y: {
                         formatter: function (value) {
+                            if (value === null || value === undefined) return 'No trades';
                             return (value >= 0 ? '+' : '') + '$' + value.toFixed(2);
                         }
                     }
