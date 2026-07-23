@@ -228,10 +228,10 @@ async function fetchStrikePrice(market: any, ticker: 'btc' | 'eth' | 'sol' | 'bn
 }
 
 const MIN_GAP_THRESHOLDS: { [key in 'btc' | 'eth' | 'sol' | 'bnb']: number } = {
-    btc: 20.00,
-    eth: 1.20,
-    sol: 0.10,
-    bnb: 0.30
+    btc: 0.00,
+    eth: 0.00,
+    sol: 0.00,
+    bnb: 0.00
 };
 
 const BOOST_GAP_THRESHOLDS: { [key in 'btc' | 'eth' | 'sol' | 'bnb']: number } = {
@@ -248,13 +248,9 @@ async function evaluateSizingAtT12(market: any, ticker: 'btc' | 'eth' | 'sol' | 
         if (!spotPrice || !strikePrice) return 10;
 
         const priceGap = Math.abs(spotPrice - strikePrice);
-        const minGap = MIN_GAP_THRESHOLDS[ticker];
         const boostGap = BOOST_GAP_THRESHOLDS[ticker];
 
-        if (priceGap <= minGap) {
-            console.log(`[Sniper] 🛑 T-12s ${ticker.toUpperCase()} Gap $${priceGap.toFixed(4)} (<= $${minGap} noise band) -> Minimum Gap Guard Active (Will Skip at T-10s)`);
-            return 10;
-        } else if (priceGap >= boostGap) {
+        if (priceGap >= boostGap) {
             console.log(`[Sniper] 🚀 T-12s ${ticker.toUpperCase()} Gap $${priceGap.toFixed(4)} (>= $${boostGap}) -> Position size set to BOOSTED 20 SHARES`);
             return 20;
         } else {
