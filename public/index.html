@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Polymarket Bot Terminal</title>
+    <title>MoonRow Polymarket Sniper Dashboard</title>
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <!-- Tailwind CSS (v3 CDN) -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -15,22 +15,16 @@
             theme: {
                 extend: {
                     fontFamily: {
-                        sans: ['Inter', 'sans-serif'],
+                        sans: ['Plus Jakarta Sans', 'sans-serif'],
                         outfit: ['Outfit', 'sans-serif'],
                     },
                     colors: {
                         brand: {
-                            50: '#f5f3ff',
-                            100: '#ede9fe',
-                            200: '#ddd6fe',
-                            300: '#c084fc',
-                            400: '#a855f7',
-                            500: '#8b5cf6',
-                            600: '#7c3aed',
-                            700: '#6d28d9',
-                            800: '#5b21b6',
-                            900: '#4c1d95',
-                            950: '#09090b',
+                            orange: '#F04438',
+                            navy: '#0B192C',
+                            teal: '#14B8A6',
+                            blue: '#3B82F6',
+                            bg: '#F2F4F7'
                         }
                     }
                 }
@@ -43,19 +37,21 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
         body {
-            background-color: #09090b;
-            color: #f4f4f5;
+            background-color: #F2F4F7;
+            color: #1D2939;
         }
-        .glass-card {
-            background: rgba(24, 24, 27, 0.75);
-            backdrop-filter: blur(12px);
-            border: 1px solid rgba(39, 39, 42, 0.6);
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        .card-shadow {
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.015);
         }
-        .glass-card:hover {
-            border-color: rgba(139, 92, 246, 0.4);
-            box-shadow: 0 10px 30px -10px rgba(139, 92, 246, 0.15);
-            transform: translateY(-2px);
+        /* Custom progress bar striping */
+        .progress-striped {
+            background-image: linear-gradient(45deg, rgba(255, 255, 255, 0.15) 25%, transparent 25%, transparent 50%, rgba(255, 255, 255, 0.15) 50%, rgba(255, 255, 255, 0.15) 75%, transparent 75%, transparent);
+            background-size: 1rem 1rem;
+        }
+        /* Active top pill styling */
+        .nav-pill.active {
+            background-color: #0B192C;
+            color: #ffffff;
         }
         /* Custom Scrollbars */
         ::-webkit-scrollbar {
@@ -63,421 +59,436 @@
             height: 6px;
         }
         ::-webkit-scrollbar-track {
-            background: rgba(9, 9, 11, 0.3);
+            background: #F2F4F7;
         }
         ::-webkit-scrollbar-thumb {
-            background: rgba(39, 39, 42, 0.8);
-            border-radius: 4px;
+            background: #D0D5DD;
+            border-radius: 8px;
         }
         ::-webkit-scrollbar-thumb:hover {
-            background: rgba(139, 92, 246, 0.5);
-        }
-        /* Active Tab Animation */
-        .sidebar-item.active {
-            background: linear-gradient(90deg, rgba(139, 92, 246, 0.15) 0%, rgba(139, 92, 246, 0) 100%);
-            border-left: 3px solid #8b5cf6;
-            color: #ffffff;
-        }
-        /* Neon Glow Utility */
-        .glow-indigo {
-            box-shadow: 0 0 40px -5px rgba(99, 102, 241, 0.15);
+            background: #98A2B3;
         }
     </style>
 </head>
-<body class="font-sans antialiased overflow-hidden h-screen flex">
+<body class="font-sans antialiased overflow-hidden h-screen flex flex-col">
 
-    <!-- SIDEBAR (LEFT) -->
-    <aside class="w-64 border-r border-zinc-800 bg-zinc-950 flex flex-col justify-between shrink-0 h-full">
-        <div>
-            <!-- Logo Header -->
-            <div class="h-16 flex items-center px-6 border-b border-zinc-800 gap-3">
-                <div class="w-8 h-8 rounded-lg bg-gradient-to-tr from-brand-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-brand-500/20">
-                    <i data-lucide="activity" class="w-5 h-5 text-white"></i>
+    <!-- TOP HEADER / NAV BAR -->
+    <header class="h-20 bg-white border-b border-gray-100 px-8 flex items-center justify-between shrink-0 card-shadow z-10">
+        <!-- Logo & Navigation Pills -->
+        <div class="flex items-center gap-10">
+            <!-- Brand Logo -->
+            <div class="flex items-center gap-2">
+                <div class="w-9 h-9 rounded-xl bg-brand-navy flex items-center justify-center shadow-md">
+                    <i data-lucide="line-chart" class="w-5 h-5 text-white"></i>
                 </div>
-                <span class="font-outfit font-bold text-lg bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent">POLYMARKET BOT</span>
+                <span class="font-outfit font-extrabold text-xl tracking-tight text-brand-navy">MoonRow</span>
             </div>
-
-            <!-- Navigation Links -->
-            <nav class="mt-6 px-3 space-y-1">
-                <button onclick="switchTab('dashboard')" id="nav-dashboard" class="sidebar-item active w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-zinc-400 hover:text-white hover:bg-zinc-900/50 transition-all duration-200">
-                    <i data-lucide="layout-dashboard" class="w-4 h-4"></i>
-                    <span>Dashboard</span>
+            
+            <!-- Navigation Pills -->
+            <nav class="flex items-center gap-2 bg-gray-50 p-1.5 rounded-xl border border-gray-100">
+                <button onclick="switchTab('dashboard')" id="nav-dashboard" class="nav-pill active px-4 py-2 rounded-lg text-xs font-semibold text-gray-500 hover:text-brand-navy transition duration-200">
+                    Dashboard
                 </button>
-                <button onclick="switchTab('trades')" id="nav-trades" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-zinc-400 hover:text-white hover:bg-zinc-900/50 transition-all duration-200">
-                    <i data-lucide="list-ordered" class="w-4 h-4"></i>
-                    <span>Trades History</span>
+                <button onclick="switchTab('trades')" id="nav-trades" class="nav-pill px-4 py-2 rounded-lg text-xs font-semibold text-gray-500 hover:text-brand-navy transition duration-200">
+                    Trades History
                 </button>
-                <button onclick="switchTab('analytics')" id="nav-analytics" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-zinc-400 hover:text-white hover:bg-zinc-900/50 transition-all duration-200">
-                    <i data-lucide="bar-chart-3" class="w-4 h-4"></i>
-                    <span>Analytics</span>
+                <button onclick="switchTab('analytics')" id="nav-analytics" class="nav-pill px-4 py-2 rounded-lg text-xs font-semibold text-gray-500 hover:text-brand-navy transition duration-200">
+                    Analytics
                 </button>
-                <button onclick="switchTab('settings')" id="nav-settings" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-zinc-400 hover:text-white hover:bg-zinc-900/50 transition-all duration-200">
-                    <i data-lucide="sliders" class="w-4 h-4"></i>
-                    <span>Settings</span>
+                <button onclick="switchTab('settings')" id="nav-settings" class="nav-pill px-4 py-2 rounded-lg text-xs font-semibold text-gray-500 hover:text-brand-navy transition duration-200">
+                    Settings
                 </button>
             </nav>
         </div>
 
-        <!-- Sidebar Footer Status -->
-        <div class="p-4 border-t border-zinc-800 bg-zinc-950/80">
-            <div class="flex items-center justify-between text-xs text-zinc-500 mb-2">
-                <span>Database Sync</span>
-                <span class="flex items-center gap-1.5 text-emerald-500 font-semibold">
-                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span>
-                    Live
-                </span>
+        <!-- Header Right side metrics & User Profile -->
+        <div class="flex items-center gap-6">
+            <!-- Messages / Alerts -->
+            <div class="flex items-center gap-3">
+                <div class="relative bg-gray-50 hover:bg-gray-100 p-2 rounded-lg border border-gray-100 cursor-pointer transition">
+                    <i data-lucide="message-square" class="w-4 h-4 text-gray-600"></i>
+                    <span class="absolute top-1 right-1 w-2 h-2 bg-brand-orange rounded-full animate-ping"></span>
+                </div>
+                <!-- Status Mode Info -->
+                <div class="bg-gray-50 border border-gray-100 px-3 py-1.5 rounded-xl flex items-center gap-2 text-xs font-medium text-gray-600">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500" id="header-status-indicator"></span>
+                    <span id="header-mode-text">PAPER MODE</span>
+                </div>
             </div>
-            <div class="text-[10px] text-zinc-600 font-mono select-none break-all" id="db-conn-str">
-                MongoDB connected
+
+            <!-- Profile Info -->
+            <div class="flex items-center gap-3 border-l border-gray-100 pl-6">
+                <div class="text-right">
+                    <span class="block text-xs font-bold text-gray-900 leading-tight">Dora Biguel Cianciolo</span>
+                    <span class="block text-[10px] text-gray-400">biguelytical@gmail.com</span>
+                </div>
+                <div class="w-10 h-10 rounded-full bg-slate-200 border-2 border-brand-navy/10 overflow-hidden">
+                    <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=100&auto=format&fit=crop" class="w-full h-full object-cover" alt="User Avatar">
+                </div>
             </div>
         </div>
-    </aside>
+    </header>
 
-    <!-- MAIN APP WRAPPER (RIGHT) -->
-    <div class="flex-1 flex flex-col overflow-hidden h-full">
-        
-        <!-- TOP HEADER BAR -->
-        <header class="h-16 border-b border-zinc-800 bg-zinc-950/50 flex items-center justify-between px-8 shrink-0">
-            <div>
-                <h1 class="font-outfit font-semibold text-lg text-white" id="welcome-msg">Welcome Back 🎉</h1>
-                <p class="text-xs text-zinc-500">Terminal monitoring interface for automated sniping</p>
-            </div>
-            <div class="flex items-center gap-4">
-                <!-- Mode Badge -->
-                <span class="px-2.5 py-1 rounded-md text-xs font-semibold bg-brand-500/10 text-brand-400 border border-brand-500/20" id="header-mode">
-                    PAPER MODE
-                </span>
-                <!-- Status Badge -->
-                <span class="flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/25" id="header-status">
-                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                    🟢 Online
-                </span>
-            </div>
-        </header>
+    <!-- CONTENT WRAPPER -->
+    <main class="flex-1 overflow-y-auto p-8 h-full">
 
-        <!-- MAIN SCROLLABLE CONTAINER -->
-        <main class="flex-1 overflow-y-auto p-8 space-y-8 h-full bg-gradient-to-b from-zinc-950 to-zinc-900/30">
-
-            <!-- TAB: DASHBOARD -->
-            <div id="tab-dashboard" class="tab-content space-y-8">
-                <!-- STATS CARDS ROW -->
-                <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
-                    <!-- Stat Card 1 -->
-                    <div class="glass-card p-6 rounded-xl relative overflow-hidden">
-                        <div class="absolute -right-4 -bottom-4 text-zinc-800/10">
-                            <i data-lucide="trending-up" class="w-24 h-24"></i>
+        <!-- TAB: DASHBOARD -->
+        <div id="tab-dashboard" class="tab-content grid grid-cols-1 lg:grid-cols-3 gap-8">
+            
+            <!-- LEFT COLUMN: GAUGE & METRICS -->
+            <div class="space-y-8 flex flex-col">
+                <!-- Dropdown Selector Card -->
+                <div class="bg-white border border-gray-100 rounded-2xl p-4 card-shadow flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-xl bg-orange-50 flex items-center justify-center text-brand-orange">
+                            <i data-lucide="globe" class="w-5 h-5"></i>
                         </div>
-                        <span class="text-xs font-semibold text-zinc-500 uppercase tracking-wider block">Total P&L</span>
-                        <div class="flex items-baseline gap-2 mt-2">
-                            <span class="font-outfit font-bold text-3xl text-white" id="card-pnl">$0.00</span>
-                            <span class="text-xs font-semibold text-emerald-400 flex items-center" id="card-pnl-trend">
-                                <i data-lucide="arrow-up-right" class="w-3.5 h-3.5 mr-0.5"></i>
-                                +0%
-                            </span>
+                        <div>
+                            <span class="block text-xs font-bold text-gray-900 leading-tight">Global Connect</span>
+                            <span class="block text-[10px] text-gray-400">4 Active Assets</span>
                         </div>
-                        <p class="text-xs text-zinc-600 mt-2">Total performance yield</p>
+                    </div>
+                    <select id="account-mode-select" class="text-xs bg-gray-50 border border-gray-100 rounded-lg px-3 py-1.5 font-semibold text-gray-600 focus:outline-none cursor-pointer">
+                        <option>Paper Trading</option>
+                        <option>Live API</option>
+                    </select>
+                </div>
+
+                <!-- Win Rate Dial Gauge Card -->
+                <div class="bg-white border border-gray-100 rounded-2xl p-6 card-shadow flex flex-col relative overflow-hidden">
+                    <span class="text-xs font-bold text-gray-400 uppercase tracking-wider block">Win Rate Gauge</span>
+                    <h3 class="font-outfit font-extrabold text-2xl text-brand-navy mt-1">Today's Increase</h3>
+                    
+                    <!-- Circular Gauge placeholder -->
+                    <div class="relative flex items-center justify-center h-52 mt-4">
+                        <div id="win-rate-gauge" class="w-full"></div>
                     </div>
 
-                    <!-- Stat Card 2 -->
-                    <div class="glass-card p-6 rounded-xl relative overflow-hidden">
-                        <div class="absolute -right-4 -bottom-4 text-zinc-800/10">
-                            <i data-lucide="award" class="w-24 h-24"></i>
+                    <!-- Under Metrics split -->
+                    <div class="grid grid-cols-3 gap-2 border-t border-gray-50 pt-6 text-center">
+                        <div class="border-r border-gray-100">
+                            <span class="block text-[10px] font-bold text-gray-400 uppercase">Wins</span>
+                            <span class="block text-lg font-outfit font-bold text-emerald-500 mt-1" id="gauge-wins">0</span>
                         </div>
-                        <span class="text-xs font-semibold text-zinc-500 uppercase tracking-wider block">Win Rate</span>
-                        <div class="flex items-baseline gap-2 mt-2">
-                            <span class="font-outfit font-bold text-3xl text-white" id="card-winrate">0.0%</span>
+                        <div class="border-r border-gray-100">
+                            <span class="block text-[10px] font-bold text-gray-400 uppercase">Losses</span>
+                            <span class="block text-lg font-outfit font-bold text-brand-orange mt-1" id="gauge-losses">0</span>
                         </div>
-                        <p class="text-xs text-zinc-600 mt-2">Success execution percentage</p>
-                    </div>
-
-                    <!-- Stat Card 3 -->
-                    <div class="glass-card p-6 rounded-xl relative overflow-hidden">
-                        <div class="absolute -right-4 -bottom-4 text-zinc-800/10">
-                            <i data-lucide="zap" class="w-24 h-24"></i>
+                        <div>
+                            <span class="block text-[10px] font-bold text-gray-400 uppercase">Avg Win Str</span>
+                            <span class="block text-lg font-outfit font-bold text-brand-navy mt-1" id="gauge-streak">0.0</span>
                         </div>
-                        <span class="text-xs font-semibold text-zinc-500 uppercase tracking-wider block">Trades Today</span>
-                        <div class="flex items-baseline gap-2 mt-2">
-                            <span class="font-outfit font-bold text-3xl text-white" id="card-trades-today">0</span>
-                            <span class="text-xs text-zinc-500" id="card-limit">/ 500 cap</span>
-                        </div>
-                        <p class="text-xs text-zinc-600 mt-2">Daily snipes execution counter</p>
-                    </div>
-
-                    <!-- Stat Card 4 -->
-                    <div class="glass-card p-6 rounded-xl relative overflow-hidden">
-                        <div class="absolute -right-4 -bottom-4 text-zinc-800/10">
-                            <i data-lucide="wallet" class="w-24 h-24"></i>
-                        </div>
-                        <span class="text-xs font-semibold text-zinc-500 uppercase tracking-wider block">Current Balance</span>
-                        <div class="flex items-baseline gap-2 mt-2">
-                            <span class="font-outfit font-bold text-3xl text-white" id="card-balance">$10,000.00</span>
-                        </div>
-                        <p class="text-xs text-zinc-600 mt-2">Available paper capital (USDC)</p>
                     </div>
                 </div>
 
-                <!-- PERFORMANCE CHART SECTION -->
-                <div class="glass-card p-6 rounded-xl glow-indigo">
+                <!-- Billing & Transactions Metrics card -->
+                <div class="bg-white border border-gray-100 rounded-2xl p-6 card-shadow flex-1">
                     <div class="flex justify-between items-center mb-6">
                         <div>
-                            <h3 class="font-outfit font-bold text-lg text-white">Performance Progression</h3>
-                            <p class="text-xs text-zinc-500">Cumulative profit progression over the last 30 trades</p>
+                            <h4 class="text-sm font-bold text-gray-900">Billing & Transactions</h4>
+                            <p class="text-[10px] text-gray-400">Performing • 1h</p>
                         </div>
-                        <div class="flex items-center gap-6 text-xs text-zinc-400 font-mono">
-                            <div>Best: <span class="text-emerald-400 font-semibold" id="chart-best">$0.00</span></div>
-                            <div>Worst: <span class="text-rose-400 font-semibold" id="chart-worst">$0.00</span></div>
-                            <div>Average: <span class="text-brand-400 font-semibold" id="chart-avg">$0.00</span></div>
+                        <button onclick="fetchData()" class="text-xs font-bold text-brand-orange hover:opacity-80 transition flex items-center gap-1">
+                            <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Refresh
+                        </button>
+                    </div>
+
+                    <!-- Stats Rows table -->
+                    <div class="space-y-4">
+                        <div class="flex justify-between items-center text-xs">
+                            <span class="font-medium text-gray-500">Bot Sniping Engine</span>
+                            <span class="font-bold text-emerald-500 bg-emerald-50 px-2 py-0.5 rounded text-[10px]">Performing</span>
+                        </div>
+                        <div class="flex justify-between items-center text-xs">
+                            <span class="font-medium text-gray-500">USDC Capital Balance</span>
+                            <span class="font-bold text-gray-900 font-mono" id="billing-balance">$10,000.00</span>
+                        </div>
+                        <div class="flex justify-between items-center text-xs">
+                            <span class="font-medium text-gray-500">Daily Trade Limit</span>
+                            <span class="font-bold text-gray-900 font-mono" id="billing-daily-trades">0 / 500 cap</span>
+                        </div>
+                        <div class="flex justify-between items-center text-xs">
+                            <span class="font-medium text-gray-500">Average Profit per Trade</span>
+                            <span class="font-bold text-gray-900 font-mono" id="billing-avg-pnl">+$0.00</span>
+                        </div>
+                        <div class="flex justify-between items-center text-xs">
+                            <span class="font-medium text-gray-500">Bot Session Status</span>
+                            <span class="font-bold text-emerald-500 bg-emerald-50 px-2 py-0.5 rounded text-[10px] flex items-center gap-1.5">
+                                <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Online
+                            </span>
                         </div>
                     </div>
-                    <!-- Performance Chart Container -->
-                    <div class="w-full h-80" id="performance-chart"></div>
+                </div>
+            </div>
+
+            <!-- RIGHT COLUMN: MAIN CHARTS & BREAKDOWNS -->
+            <div class="lg:col-span-2 space-y-8">
+                <!-- Target Sales Breakdown Card (ApexChart Spline & Horizontal progress) -->
+                <div class="bg-white border border-gray-100 rounded-2xl p-6 card-shadow">
+                    <div class="flex justify-between items-center mb-6">
+                        <div class="flex items-center gap-2">
+                            <i data-lucide="bar-chart-2" class="w-4 h-4 text-brand-navy"></i>
+                            <h4 class="text-sm font-bold text-gray-900">Target Sales Breakdown</h4>
+                        </div>
+                        <!-- Date tabs filter toggle -->
+                        <div class="flex gap-1 bg-gray-50 border border-gray-100 rounded-xl p-1 text-[10px] font-semibold text-gray-500">
+                            <button class="px-3 py-1.5 hover:text-brand-navy">Daily</button>
+                            <button class="px-3 py-1.5 hover:text-brand-navy">Weekly</button>
+                            <button class="px-3 py-1.5 bg-brand-navy text-white rounded-lg">Monthly</button>
+                            <button class="px-3 py-1.5 hover:text-brand-navy">Annually</button>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-5 gap-8">
+                        <!-- Horizontal Progress Bars breakdown (2/5 cols) -->
+                        <div class="md:col-span-2 space-y-6">
+                            <div>
+                                <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Total Ticket Sales</span>
+                                <h2 class="font-outfit font-extrabold text-3xl text-brand-navy mt-1" id="breakdown-total-pnl">+$0.00</h2>
+                            </div>
+
+                            <!-- Progress breakdown list -->
+                            <div class="space-y-4 pt-4 border-t border-gray-50" id="crypto-progress-container">
+                                <!-- BTC Progress -->
+                                <div>
+                                    <div class="flex justify-between text-xs font-semibold mb-1">
+                                        <span class="text-gray-600">Bitcoin (BTC)</span>
+                                        <span class="text-brand-navy font-mono" id="pnl-btc">+$0.00</span>
+                                    </div>
+                                    <div class="w-full bg-gray-100 rounded-full h-4 overflow-hidden relative">
+                                        <div id="bar-btc" class="bg-brand-orange h-full rounded-full transition-all duration-500 progress-striped" style="width: 0%"></div>
+                                    </div>
+                                </div>
+
+                                <!-- ETH Progress -->
+                                <div>
+                                    <div class="flex justify-between text-xs font-semibold mb-1">
+                                        <span class="text-gray-600">Ethereum (ETH)</span>
+                                        <span class="text-brand-navy font-mono" id="pnl-eth">+$0.00</span>
+                                    </div>
+                                    <div class="w-full bg-gray-100 rounded-full h-4 overflow-hidden relative">
+                                        <div id="bar-eth" class="bg-brand-navy h-full rounded-full transition-all duration-500 progress-striped" style="width: 0%"></div>
+                                    </div>
+                                </div>
+
+                                <!-- SOL Progress -->
+                                <div>
+                                    <div class="flex justify-between text-xs font-semibold mb-1">
+                                        <span class="text-gray-600">Solana (SOL)</span>
+                                        <span class="text-brand-navy font-mono" id="pnl-sol">+$0.00</span>
+                                    </div>
+                                    <div class="w-full bg-gray-100 rounded-full h-4 overflow-hidden relative">
+                                        <div id="bar-sol" class="bg-brand-teal h-full rounded-full transition-all duration-500 progress-striped" style="width: 0%"></div>
+                                    </div>
+                                </div>
+
+                                <!-- XRP Progress -->
+                                <div>
+                                    <div class="flex justify-between text-xs font-semibold mb-1">
+                                        <span class="text-gray-600">Ripple (XRP)</span>
+                                        <span class="text-brand-navy font-mono" id="pnl-xrp">+$0.00</span>
+                                    </div>
+                                    <div class="w-full bg-gray-100 rounded-full h-4 overflow-hidden relative">
+                                        <div id="bar-xrp" class="bg-brand-blue h-full rounded-full transition-all duration-500 progress-striped" style="width: 0%"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Spline Area Chart (3/5 cols) -->
+                        <div class="md:col-span-3 flex flex-col justify-end">
+                            <div class="w-full h-64" id="main-area-chart"></div>
+                            <!-- Small legend under chart -->
+                            <div class="flex justify-around text-[10px] text-gray-500 font-semibold border-t border-gray-50 pt-3">
+                                <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 bg-brand-orange rounded-full"></span> Bitcoin</span>
+                                <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 bg-brand-navy rounded-full"></span> Ethereum</span>
+                                <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 bg-brand-teal rounded-full"></span> Solana</span>
+                                <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 bg-brand-blue rounded-full"></span> XRP</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
-                <!-- TWO COLUMN LAYOUT -->
-                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    <!-- Left Column: Recent Trades (Width: 2/3) -->
-                    <div class="lg:col-span-2 glass-card p-6 rounded-xl flex flex-col h-[400px]">
+                <!-- Bottom sections split -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <!-- Bottom Left: Top Performing Assets -->
+                    <div class="bg-white border border-gray-100 rounded-2xl p-6 card-shadow flex flex-col h-[340px]">
                         <div class="flex justify-between items-center mb-4">
-                            <div>
-                                <h3 class="font-outfit font-bold text-base text-white">Recent Snipes</h3>
-                                <p class="text-xs text-zinc-500">Recent market positions captured by the algorithm</p>
-                            </div>
-                            <button onclick="switchTab('trades')" class="text-xs font-semibold text-brand-400 hover:text-brand-300 transition duration-150">
-                                View Full History
-                            </button>
+                            <h4 class="text-sm font-bold text-gray-900">Top Performing Cryptos</h4>
+                            <span class="text-[10px] text-gray-400 font-bold uppercase">Asset breakdown</span>
                         </div>
-                        <!-- Trades Table -->
                         <div class="flex-1 overflow-y-auto">
                             <table class="w-full text-left border-collapse text-xs">
                                 <thead>
-                                    <tr class="border-b border-zinc-800 text-zinc-500 uppercase tracking-wider text-[10px]">
-                                        <th class="py-3 px-4 font-semibold">Time</th>
-                                        <th class="py-3 px-4 font-semibold">Market</th>
-                                        <th class="py-3 px-4 font-semibold text-center">Side</th>
-                                        <th class="py-3 px-4 font-semibold text-right">Entry</th>
-                                        <th class="py-3 px-4 font-semibold text-right">Strike Price</th>
-                                        <th class="py-3 px-4 font-semibold text-right">PnL</th>
-                                        <th class="py-3 px-4 font-semibold text-center">Status</th>
+                                    <tr class="border-b border-gray-50 text-gray-400 font-semibold text-[10px]">
+                                        <th class="py-2.5">Asset</th>
+                                        <th class="py-2.5 text-right">PnL</th>
+                                        <th class="py-2.5 text-center">Wins</th>
+                                        <th class="py-2.5 text-center">Losses</th>
                                     </tr>
                                 </thead>
-                                <tbody id="recent-trades-body" class="divide-y divide-zinc-900">
-                                    <!-- Dynamic content goes here -->
+                                <tbody class="divide-y divide-gray-50" id="performing-cryptos-body">
+                                    <!-- Dynamic rows loaded here -->
                                 </tbody>
                             </table>
                         </div>
                     </div>
 
-                    <!-- Right Column: Stats (Width: 1/3) -->
-                    <div class="glass-card p-6 rounded-xl flex flex-col justify-between h-[400px]">
-                        <div>
-                            <h3 class="font-outfit font-bold text-base text-white">Distribution</h3>
-                            <p class="text-xs text-zinc-500 mb-6">Win rates and position direction aggregates</p>
+                    <!-- Bottom Right: User Retention Cohorts styled segmented pillars -->
+                    <div class="bg-white border border-gray-100 rounded-2xl p-6 card-shadow flex flex-col h-[340px]">
+                        <div class="flex justify-between items-center mb-4">
+                            <h4 class="text-sm font-bold text-gray-900">User Retention Cohorts</h4>
+                            <span class="text-[10px] text-gray-400 font-bold uppercase">Performing • 1h</span>
                         </div>
-                        <!-- Donut Charts Row -->
-                        <div class="grid grid-cols-2 gap-4 flex-1 items-center">
-                            <div class="flex flex-col items-center">
-                                <div id="win-loss-donut" class="w-full"></div>
-                                <span class="text-[10px] text-zinc-500 font-medium mt-1">Win/Loss Split</span>
-                            </div>
-                            <div class="flex flex-col items-center">
-                                <div id="side-donut" class="w-full"></div>
-                                <span class="text-[10px] text-zinc-500 font-medium mt-1">YES vs NO</span>
-                            </div>
-                        </div>
-                        <div class="border-t border-zinc-850 pt-4 mt-4 flex items-center justify-between text-xs">
-                            <span class="text-zinc-500">Average profit per trade:</span>
-                            <span class="font-bold text-emerald-400 font-mono" id="stat-avg-pnl">+$0.00</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- QUICK STATS FOOTER -->
-                <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
-                    <div class="glass-card p-4 rounded-xl flex items-center gap-4">
-                        <div class="p-3 rounded-lg bg-zinc-900 text-brand-400">
-                            <i data-lucide="flame" class="w-5 h-5"></i>
-                        </div>
-                        <div>
-                            <span class="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider block">Top Market</span>
-                            <span class="text-xs font-semibold text-white truncate max-w-[150px] block" id="footer-top-market">N/A</span>
-                        </div>
-                    </div>
-
-                    <div class="glass-card p-4 rounded-xl flex items-center gap-4">
-                        <div class="p-3 rounded-lg bg-zinc-900 text-emerald-400">
-                            <i data-lucide="crown" class="w-5 h-5"></i>
-                        </div>
-                        <div>
-                            <span class="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider block">Best Trade</span>
-                            <span class="text-xs font-semibold text-emerald-450 font-mono" id="footer-best-trade">+$0.00</span>
-                        </div>
-                    </div>
-
-                    <div class="glass-card p-4 rounded-xl flex items-center gap-4">
-                        <div class="p-3 rounded-lg bg-zinc-900 text-rose-400">
-                            <i data-lucide="skull" class="w-5 h-5"></i>
-                        </div>
-                        <div>
-                            <span class="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider block">Worst Trade</span>
-                            <span class="text-xs font-semibold text-rose-400 font-mono" id="footer-worst-trade">-$0.00</span>
-                        </div>
-                    </div>
-
-                    <div class="glass-card p-4 rounded-xl flex items-center gap-4">
-                        <div class="p-3 rounded-lg bg-zinc-900 text-indigo-400">
-                            <i data-lucide="scale" class="w-5 h-5"></i>
-                        </div>
-                        <div>
-                            <span class="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider block">Average Size</span>
-                            <span class="text-xs font-semibold text-white font-mono" id="footer-avg-size">0.0 shares</span>
-                        </div>
+                        <!-- Cohort pillars bar graph -->
+                        <div class="w-full flex-1" id="cohorts-bar-chart"></div>
                     </div>
                 </div>
             </div>
+        </div>
 
-            <!-- TAB: TRADES HISTORY -->
-            <div id="tab-trades" class="tab-content hidden space-y-6">
-                <div class="glass-card p-6 rounded-xl flex flex-col min-h-[500px]">
-                    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-                        <div>
-                            <h3 class="font-outfit font-bold text-lg text-white">Trades History</h3>
-                            <p class="text-xs text-zinc-500">Historical records of all bot activity</p>
-                        </div>
-                        <!-- Search and Filter Panel -->
-                        <div class="flex flex-wrap items-center gap-3">
-                            <div class="relative">
-                                <i data-lucide="search" class="absolute left-3 top-2.5 w-4 h-4 text-zinc-500"></i>
-                                <input type="text" id="search-history" placeholder="Search markets..." class="pl-9 pr-4 py-2 w-64 bg-zinc-900/50 border border-zinc-800 rounded-lg text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-brand-500 transition duration-150">
-                            </div>
-                            <select id="filter-status" class="px-4 py-2 bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-zinc-300 focus:outline-none focus:border-brand-500 transition duration-150">
-                                <option value="all">All Statuses</option>
-                                <option value="open">Open Positions</option>
-                                <option value="closed">Closed Positions</option>
-                            </select>
-                        </div>
+        <!-- TAB: TRADES HISTORY -->
+        <div id="tab-trades" class="tab-content hidden space-y-6">
+            <div class="bg-white border border-gray-100 rounded-2xl p-6 card-shadow min-h-[500px] flex flex-col">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+                    <div>
+                        <h3 class="font-outfit font-extrabold text-xl text-brand-navy">Trades History</h3>
+                        <p class="text-xs text-gray-400">Historical records of all bot activity</p>
                     </div>
+                    <!-- Search and Filter Panel -->
+                    <div class="flex flex-wrap items-center gap-3">
+                        <div class="relative">
+                            <i data-lucide="search" class="absolute left-3 top-2.5 w-4 h-4 text-gray-400"></i>
+                            <input type="text" id="search-history" placeholder="Search markets..." class="pl-9 pr-4 py-2 w-64 bg-gray-50 border border-gray-100 rounded-xl text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:border-brand-navy transition duration-150">
+                        </div>
+                        <select id="filter-status" class="px-4 py-2 bg-gray-50 border border-gray-100 rounded-xl text-xs text-gray-700 focus:outline-none focus:border-brand-navy transition duration-150">
+                            <option value="all">All Statuses</option>
+                            <option value="open">Open Positions</option>
+                            <option value="closed">Closed Positions</option>
+                        </select>
+                    </div>
+                </div>
 
-                    <!-- Scrollable History Table -->
-                    <div class="flex-1 overflow-x-auto">
-                        <table class="w-full text-left border-collapse text-xs">
-                            <thead>
-                                <tr class="border-b border-zinc-800 text-zinc-500 uppercase tracking-wider text-[10px]">
-                                    <th class="py-3 px-4 font-semibold">Trade ID</th>
-                                    <th class="py-3 px-4 font-semibold">Time</th>
-                                    <th class="py-3 px-4 font-semibold">Market Description</th>
-                                    <th class="py-3 px-4 font-semibold text-center">Side</th>
-                                    <th class="py-3 px-4 font-semibold text-right">Shares</th>
-                                    <th class="py-3 px-4 font-semibold text-right">Entry Price</th>
-                                    <th class="py-3 px-4 font-semibold text-right">BTC at Entry</th>
-                                    <th class="py-3 px-4 font-semibold text-right">Strike Price</th>
-                                    <th class="py-3 px-4 font-semibold text-right">Exit Price</th>
-                                    <th class="py-3 px-4 font-semibold text-right">PnL</th>
-                                    <th class="py-3 px-4 font-semibold text-center">Status</th>
-                                </tr>
-                            </thead>
-                            <tbody id="history-trades-body" class="divide-y divide-zinc-900">
-                                <!-- Dynamic entries -->
-                            </tbody>
-                        </table>
+                <!-- Scrollable History Table -->
+                <div class="flex-1 overflow-x-auto">
+                    <table class="w-full text-left border-collapse text-xs">
+                        <thead>
+                            <tr class="border-b border-gray-100 text-gray-400 font-semibold text-[10px] uppercase tracking-wider">
+                                <th class="py-3 px-4">Trade ID</th>
+                                <th class="py-3 px-4">Time</th>
+                                <th class="py-3 px-4">Market Description</th>
+                                <th class="py-3 px-4 text-center">Side</th>
+                                <th class="py-3 px-4 text-right">Shares</th>
+                                <th class="py-3 px-4 text-right">Entry Price</th>
+                                <th class="py-3 px-4 text-right">Spot at Entry</th>
+                                <th class="py-3 px-4 text-right">Strike Price</th>
+                                <th class="py-3 px-4 text-right">Exit Price</th>
+                                <th class="py-3 px-4 text-right">PnL</th>
+                                <th class="py-3 px-4 text-center">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="history-trades-body" class="divide-y divide-gray-50 text-gray-700">
+                            <!-- Dynamic entries -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB: ANALYTICS -->
+        <div id="tab-analytics" class="tab-content hidden space-y-8">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <!-- Cumulative Profit Chart -->
+                <div class="bg-white border border-gray-100 rounded-2xl p-6 card-shadow">
+                    <h3 class="font-outfit font-extrabold text-lg text-brand-navy mb-4">Total Yield (All Trades)</h3>
+                    <div class="w-full h-72" id="analytics-yield-chart"></div>
+                </div>
+                <!-- P&L Distribution -->
+                <div class="bg-white border border-gray-100 rounded-2xl p-6 card-shadow">
+                    <h3 class="font-outfit font-extrabold text-lg text-brand-navy mb-4">P&L Range Distribution</h3>
+                    <div class="w-full h-72" id="analytics-dist-chart"></div>
+                </div>
+            </div>
+            
+            <!-- Mini stats cards row -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+                <div class="bg-white border border-gray-100 rounded-2xl p-6 card-shadow">
+                    <h4 class="text-xs font-bold text-gray-400 uppercase tracking-wider block">Win Streak</h4>
+                    <div class="font-outfit font-extrabold text-3xl text-emerald-500 mt-2" id="analytics-streak">0 trades</div>
+                    <p class="text-[10px] text-gray-400 mt-1">Active winning run</p>
+                </div>
+                <div class="bg-white border border-gray-100 rounded-2xl p-6 card-shadow">
+                    <h4 class="text-xs font-bold text-gray-400 uppercase tracking-wider block">Avg Wins before Loss</h4>
+                    <div class="font-outfit font-extrabold text-3xl text-brand-orange mt-2" id="analytics-avg-win-streak">0.0 wins</div>
+                    <p class="text-[10px] text-gray-400 mt-1">Average wins before a loss</p>
+                </div>
+                <div class="bg-white border border-gray-100 rounded-2xl p-6 card-shadow">
+                    <h4 class="text-xs font-bold text-gray-400 uppercase tracking-wider block">Avg Win Size</h4>
+                    <div class="font-outfit font-extrabold text-3xl text-brand-navy mt-2" id="analytics-avg-win">+$0.00</div>
+                    <p class="text-[10px] text-gray-400 mt-1">Mean profit per win trade</p>
+                </div>
+                <div class="bg-white border border-gray-100 rounded-2xl p-6 card-shadow">
+                    <h4 class="text-xs font-bold text-gray-400 uppercase tracking-wider block">Avg Loss Size</h4>
+                    <div class="font-outfit font-extrabold text-3xl text-brand-navy mt-2" id="analytics-avg-loss">-$0.00</div>
+                    <p class="text-[10px] text-gray-400 mt-1">Mean loss per losing trade</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB: SETTINGS -->
+        <div id="tab-settings" class="tab-content hidden space-y-6">
+            <div class="bg-white border border-gray-100 rounded-2xl p-6 card-shadow max-w-3xl">
+                <h3 class="font-outfit font-extrabold text-xl text-brand-navy mb-2">Bot Settings Configuration</h3>
+                <p class="text-xs text-gray-400 mb-6">Read-only configurations retrieved from active bot session environment.</p>
+                
+                <div class="space-y-4">
+                    <div class="grid grid-cols-3 gap-4 border-b border-gray-50 pb-3">
+                        <span class="text-xs text-gray-500 font-bold">Daily Snipe Limit</span>
+                        <span class="text-xs text-brand-navy col-span-2 font-mono" id="setting-limit">500 trades</span>
+                    </div>
+                    <div class="grid grid-cols-3 gap-4 border-b border-gray-50 pb-3">
+                        <span class="text-xs text-gray-500 font-bold">Trading Limit Per Snipe</span>
+                        <span class="text-xs text-brand-navy col-span-2 font-mono" id="setting-trade-size">1.00 USDC</span>
+                    </div>
+                    <div class="grid grid-cols-3 gap-4 border-b border-gray-50 pb-3">
+                        <span class="text-xs text-gray-500 font-bold">Execution Snipe Window</span>
+                        <span class="text-xs text-brand-navy col-span-2 font-mono" id="setting-window">Final 10 seconds before expiry</span>
+                    </div>
+                    <div class="grid grid-cols-3 gap-4 border-b border-gray-50 pb-3">
+                        <span class="text-xs text-gray-500 font-bold">Polymarket Proxy Address</span>
+                        <span class="text-xs text-brand-navy col-span-2 font-mono select-all truncate" id="setting-proxy">N/A</span>
+                    </div>
+                    <div class="grid grid-cols-3 gap-4 border-b border-gray-50 pb-3">
+                        <span class="text-xs text-gray-500 font-bold">Telegram Alert Channel</span>
+                        <span class="text-xs text-emerald-500 col-span-2 font-medium" id="setting-telegram">Connected</span>
                     </div>
                 </div>
             </div>
+        </div>
 
-            <!-- TAB: ANALYTICS -->
-            <div id="tab-analytics" class="tab-content hidden space-y-8">
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    <!-- Cumulative Profit Chart -->
-                    <div class="glass-card p-6 rounded-xl">
-                        <h3 class="font-outfit font-bold text-base text-white mb-4">Total Yield (All Trades)</h3>
-                        <div class="w-full h-72" id="analytics-yield-chart"></div>
-                    </div>
-                    <!-- Trade Holds Histogram / P&L Distribution -->
-                    <div class="glass-card p-6 rounded-xl">
-                        <h3 class="font-outfit font-bold text-base text-white mb-4">P&L Range Distribution</h3>
-                        <div class="w-full h-72" id="analytics-dist-chart"></div>
-                    </div>
-                </div>
-                <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
-                    <div class="glass-card p-6 rounded-xl">
-                        <h4 class="text-xs font-semibold text-zinc-500 uppercase tracking-wider block">Win Streak</h4>
-                        <div class="font-outfit font-bold text-4xl text-emerald-450 mt-2" id="analytics-streak">0 trades</div>
-                        <p class="text-xs text-zinc-650 mt-2">Active winning run</p>
-                    </div>
-                    <div class="glass-card p-6 rounded-xl">
-                        <h4 class="text-xs font-semibold text-zinc-500 uppercase tracking-wider block">Avg Wins before Loss</h4>
-                        <div class="font-outfit font-bold text-4xl text-brand-400 mt-2" id="analytics-avg-win-streak">0.0 wins</div>
-                        <p class="text-xs text-zinc-650 mt-2">Average wins before a loss</p>
-                    </div>
-                    <div class="glass-card p-6 rounded-xl">
-                        <h4 class="text-xs font-semibold text-zinc-500 uppercase tracking-wider block">Avg Win Size</h4>
-                        <div class="font-outfit font-bold text-4xl text-white mt-2" id="analytics-avg-win">+$0.00</div>
-                        <p class="text-xs text-zinc-655 mt-2">Mean profit per win trade</p>
-                    </div>
-                    <div class="glass-card p-6 rounded-xl">
-                        <h4 class="text-xs font-semibold text-zinc-500 uppercase tracking-wider block">Avg Loss Size</h4>
-                        <div class="font-outfit font-bold text-4xl text-white mt-2" id="analytics-avg-loss">-$0.00</div>
-                        <p class="text-xs text-zinc-660 mt-2">Mean loss per losing trade</p>
-                    </div>
-                </div>
-            </div>
+    </main>
 
-            <!-- TAB: SETTINGS -->
-            <div id="tab-settings" class="tab-content hidden space-y-6">
-                <div class="glass-card p-6 rounded-xl max-w-3xl">
-                    <h3 class="font-outfit font-bold text-lg text-white mb-2">Bot Settings Configuration</h3>
-                    <p class="text-xs text-zinc-500 mb-6">Read-only configurations retrieved from active bot session environment.</p>
-                    
-                    <div class="space-y-4">
-                        <div class="grid grid-cols-3 gap-4 border-b border-zinc-800/60 pb-3">
-                            <span class="text-xs text-zinc-400 font-medium">Daily Snipe Limit</span>
-                            <span class="text-xs text-white col-span-2 font-mono" id="setting-limit">500 trades</span>
-                        </div>
-                        <div class="grid grid-cols-3 gap-4 border-b border-zinc-800/60 pb-3">
-                            <span class="text-xs text-zinc-400 font-medium">Trading Limit Per Snipe</span>
-                            <span class="text-xs text-white col-span-2 font-mono" id="setting-trade-size">1.00 USDC</span>
-                        </div>
-                        <div class="grid grid-cols-3 gap-4 border-b border-zinc-800/60 pb-3">
-                            <span class="text-xs text-zinc-400 font-medium">Execution Snipe Window</span>
-                            <span class="text-xs text-white col-span-2 font-mono" id="setting-window">Final 10 seconds before expiry</span>
-                        </div>
-                        <div class="grid grid-cols-3 gap-4 border-b border-zinc-800/60 pb-3">
-                            <span class="text-xs text-zinc-400 font-medium">Polymarket Proxy Address</span>
-                            <span class="text-xs text-white col-span-2 font-mono select-all truncate" id="setting-proxy">N/A</span>
-                        </div>
-                        <div class="grid grid-cols-3 gap-4 border-b border-zinc-800/60 pb-3">
-                            <span class="text-xs text-zinc-400 font-medium">Telegram Alert Channel</span>
-                            <span class="text-xs text-emerald-450 col-span-2 font-medium" id="setting-telegram">Connected</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-        </main>
-    </div>
-
-    <!-- MAIN DASHBOARD LOGIC -->
+    <!-- CORE SCRIPTS -->
     <script>
-        // Store current tab
         let currentTab = 'dashboard';
         let allTrades = [];
-        let performanceChartInstance = null;
-        let winLossChartInstance = null;
-        let sideChartInstance = null;
+        
+        let winRateGaugeInstance = null;
+        let mainAreaChartInstance = null;
+        let cohortsBarChartInstance = null;
+        
         let yieldChartInstance = null;
         let distChartInstance = null;
 
-        // Start function
         document.addEventListener('DOMContentLoaded', () => {
             lucide.createIcons();
             fetchData();
-            // Start regular interval polling
             setInterval(fetchData, 5000);
         });
 
-        // Tab switcher
         function switchTab(tabId) {
             document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
-            document.querySelectorAll('.sidebar-item').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.nav-pill').forEach(el => el.classList.remove('active'));
             
             document.getElementById(`tab-${tabId}`).classList.remove('hidden');
             document.getElementById(`nav-${tabId}`).classList.add('active');
@@ -486,7 +497,6 @@
             renderTabCharts();
         }
 
-        // Render charts based on active tab to prevent rendering issues on hidden elements
         function renderTabCharts() {
             if (currentTab === 'dashboard') {
                 renderDashboardCharts();
@@ -495,63 +505,45 @@
             }
         }
 
-        // Fetch data from API
         async function fetchData() {
             try {
-                // Fetch stats
                 const statsResponse = await fetch('/api/stats');
                 const stats = await statsResponse.json();
                 
-                // Fetch status
                 const statusResponse = await fetch('/status');
                 const botStatus = await statusResponse.json();
                 
-                // Fetch trades
                 const tradesResponse = await fetch('/api/trades');
                 allTrades = await tradesResponse.json();
                 
-                // Update header
-                document.getElementById('header-mode').innerText = botStatus.paperMode ? 'PAPER MODE' : 'LIVE MODE';
-                document.getElementById('header-status').innerHTML = botStatus.botEnabled 
-                    ? '<span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> 🟢 Online' 
-                    : '<span class="w-2 h-2 rounded-full bg-rose-500"></span> 🔴 Offline';
-                
-                // Update stats cards
-                const pnlElement = document.getElementById('card-pnl');
-                pnlElement.innerText = `${stats.totalPnL >= 0 ? '+' : ''}$${stats.totalPnL.toFixed(2)}`;
-                if (stats.totalPnL >= 0) {
-                    pnlElement.className = 'font-outfit font-bold text-3xl text-emerald-400';
+                // Mode indicator
+                document.getElementById('header-mode-text').innerText = botStatus.paperMode ? 'PAPER MODE' : 'LIVE MODE';
+                const indicator = document.getElementById('header-status-indicator');
+                if (botStatus.botEnabled) {
+                    indicator.className = "w-2 h-2 rounded-full bg-emerald-500 animate-pulse";
                 } else {
-                    pnlElement.className = 'font-outfit font-bold text-3xl text-rose-400';
+                    indicator.className = "w-2 h-2 rounded-full bg-rose-500";
                 }
-                
-                // Calculate PnL percentage trend based on paper initial balance (e.g. 10000)
-                const initialBal = 10000;
-                const pnlPercentage = (stats.totalPnL / initialBal) * 100;
-                const trendElement = document.getElementById('card-pnl-trend');
-                trendElement.innerHTML = `${pnlPercentage >= 0 ? '<i data-lucide="arrow-up-right" class="w-3.5 h-3.5 mr-0.5"></i>+' : '<i data-lucide="arrow-down-right" class="w-3.5 h-3.5 mr-0.5"></i>'}${pnlPercentage.toFixed(2)}%`;
-                trendElement.className = pnlPercentage >= 0 ? 'text-xs font-semibold text-emerald-400 flex items-center' : 'text-xs font-semibold text-rose-400 flex items-center';
 
-                document.getElementById('card-winrate').innerText = `${stats.winRate.toFixed(1)}%`;
-                document.getElementById('card-trades-today').innerText = stats.tradesToday;
-                document.getElementById('card-balance').innerText = `$${stats.balance.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+                // Balance
+                document.getElementById('billing-balance').innerText = `$${stats.balance.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+                document.getElementById('billing-daily-trades').innerText = `${stats.tradesToday} / ${botStatus.paperMode ? 500 : 500} cap`;
+                document.getElementById('billing-avg-pnl').innerText = `${stats.avgPnL >= 0 ? '+' : ''}$${stats.avgPnL.toFixed(2)}`;
 
-                // Update settings fields
+                // Settings
                 document.getElementById('setting-limit').innerText = `${botStatus.botEnabled ? 'Active' : 'Paused'} (${stats.tradesToday} / ${botStatus.paperMode ? 500 : 500} daily cap)`;
-                document.getElementById('setting-trade-size').innerText = `1.00 USDC`;
                 document.getElementById('setting-proxy').innerText = botStatus.paperMode ? 'N/A (Paper Account)' : 'Active Proxy';
 
-                // Update quick stats footer
-                document.getElementById('footer-top-market').innerText = stats.topMarket;
-                document.getElementById('footer-best-trade').innerText = `+$${stats.bestTrade.toFixed(2)}`;
-                document.getElementById('footer-worst-trade').innerText = `${stats.worstTrade < 0 ? '-' : ''}$${Math.abs(stats.worstTrade).toFixed(2)}`;
-                document.getElementById('footer-avg-size').innerText = `${stats.avgTradeSize.toFixed(1)} shares`;
-                document.getElementById('stat-avg-pnl').innerText = `${stats.avgPnL >= 0 ? '+' : ''}$${stats.avgPnL.toFixed(2)}`;
+                // Target breakdown total PnL
+                document.getElementById('breakdown-total-pnl').innerText = `${stats.totalPnL >= 0 ? '+' : ''}$${stats.totalPnL.toFixed(2)}`;
 
-                // Update tables
+                // Update crypto breakdown progress bars & stats
+                updateCryptoBreakdown(stats);
+                
+                // Update dynamic tables
                 updateTables(allTrades);
                 
-                // Re-render charts
+                // Render charts
                 renderTabCharts();
                 lucide.createIcons();
             } catch (err) {
@@ -559,46 +551,74 @@
             }
         }
 
-        // Update tables DOM
-        function updateTables(trades) {
-            // Recent trades (limit to 6)
-            const recentBody = document.getElementById('recent-trades-body');
-            recentBody.innerHTML = '';
+        function updateCryptoBreakdown(stats) {
+            const pnlByCrypto = stats.pnlByCrypto || { btc: 0, eth: 0, sol: 0, xrp: 0 };
+            const tradesCount = stats.tradesCountByCrypto || {
+                btc: { wins: 0, losses: 0, total: 0 },
+                eth: { wins: 0, losses: 0, total: 0 },
+                sol: { wins: 0, losses: 0, total: 0 },
+                xrp: { wins: 0, losses: 0, total: 0 }
+            };
+
+            const assets = ['btc', 'eth', 'sol', 'xrp'];
             
-            const recentTrades = trades.slice(0, 6);
-            if (recentTrades.length === 0) {
-                recentBody.innerHTML = '<tr><td colspan="7" class="py-8 text-center text-zinc-500">No recent trades found. Waiting for executions...</td></tr>';
-            } else {
-                recentTrades.forEach(t => {
-                    const row = document.createElement('tr');
-                    row.className = 'hover:bg-zinc-900/30 transition duration-150';
-                    
-                    const time = new Date(t.entry_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-                    const pnlClass = t.pnl > 0 ? 'text-emerald-400 font-semibold font-mono' : (t.pnl < 0 ? 'text-rose-400 font-semibold font-mono' : 'text-zinc-500 font-mono');
-                    const pnlStr = t.status === 'open' ? '-' : `${t.pnl >= 0 ? '+' : ''}$${t.pnl.toFixed(2)}`;
-                    
-                    let statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-500/10 text-amber-500 border border-amber-500/20">🟡 Open</span>';
-                    if (t.status === 'closed') {
-                        statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">✅ Settled</span>';
-                    }
+            // Set text values
+            assets.forEach(a => {
+                const val = pnlByCrypto[a] || 0;
+                document.getElementById(`pnl-${a}`).innerText = `${val >= 0 ? '+' : ''}$${val.toFixed(2)}`;
+            });
 
-                    row.innerHTML = `
-                        <td class="py-3 px-4 font-mono text-zinc-400">${time}</td>
-                        <td class="py-3 px-4 font-medium text-white truncate max-w-[200px] hover:text-brand-300 transition cursor-help" title="${t.question}">${t.question}</td>
-                        <td class="py-3 px-4 text-center">
-                            <span class="${t.side === 'YES' ? 'text-brand-400 bg-brand-400/10 border-brand-400/20' : 'text-zinc-400 bg-zinc-400/10 border-zinc-400/20'} px-2 py-0.5 border rounded text-[10px] font-bold">${t.side}</span>
-                        </td>
-                        <td class="py-3 px-4 text-right text-zinc-300 font-mono">$${t.entry_price.toFixed(2)}</td>
-                        <td class="py-3 px-4 text-right text-zinc-300 font-mono">$${t.strike_price ? t.strike_price.toLocaleString() : 'N/A'}</td>
-                        <td class="py-3 px-4 text-right ${pnlClass}">	extStr</td>
-                        <td class="py-3 px-4 text-center">${statusBadge}</td>
-                    `.replace('textStr', pnlStr);
-                    
-                    recentBody.appendChild(row);
-                });
-            }
+            // Calculate percentage shares of total volume/trades to scale bars
+            const totalTrades = Object.values(tradesCount).reduce((acc, curr) => acc + (curr.total || 0), 0) || 1;
+            assets.forEach(a => {
+                const share = (((tradesCount[a]?.total || 0) / totalTrades) * 100).toFixed(0);
+                document.getElementById(`bar-${a}`).style.width = `${share}%`;
+            });
 
-            // History tab
+            // Update bottom left table: Top Performing Cryptos
+            const tbody = document.getElementById('performing-cryptos-body');
+            tbody.innerHTML = '';
+            
+            const list = assets.map(a => {
+                let name = 'Bitcoin';
+                if (a === 'eth') name = 'Ethereum';
+                else if (a === 'sol') name = 'Solana';
+                else if (a === 'xrp') name = 'Ripple';
+                return {
+                    id: a,
+                    name,
+                    pnl: pnlByCrypto[a] || 0,
+                    wins: tradesCount[a]?.wins || 0,
+                    losses: tradesCount[a]?.losses || 0,
+                };
+            }).sort((a, b) => b.pnl - a.pnl);
+
+            list.forEach(item => {
+                const row = document.createElement('tr');
+                row.className = 'hover:bg-gray-50/50 transition';
+                
+                let coinColor = 'bg-brand-orange';
+                if (item.id === 'eth') coinColor = 'bg-brand-navy';
+                else if (item.id === 'sol') coinColor = 'bg-brand-teal';
+                else if (item.id === 'xrp') coinColor = 'bg-brand-blue';
+
+                row.innerHTML = `
+                    <td class="py-3 flex items-center gap-2">
+                        <span class="w-2.5 h-2.5 rounded-full ${coinColor}"></span>
+                        <span class="font-semibold text-gray-900">${item.name}</span>
+                    </td>
+                    <td class="py-3 text-right font-mono font-bold ${item.pnl >= 0 ? 'text-emerald-500' : 'text-brand-orange'}">
+                        ${item.pnl >= 0 ? '+' : ''}$${item.pnl.toFixed(2)}
+                    </td>
+                    <td class="py-3 text-center font-mono text-gray-500">${item.wins}</td>
+                    <td class="py-3 text-center font-mono text-gray-500">${item.losses}</td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        function updateTables(trades) {
+            // History tab table
             const historyBody = document.getElementById('history-trades-body');
             const searchVal = document.getElementById('search-history').value.toLowerCase();
             const statusFilter = document.getElementById('filter-status').value;
@@ -612,77 +632,126 @@
             });
 
             if (filteredTrades.length === 0) {
-                historyBody.innerHTML = '<tr><td colspan="11" class="py-12 text-center text-zinc-500">No matching historical records found.</td></tr>';
+                historyBody.innerHTML = '<tr><td colspan="11" class="py-12 text-center text-gray-400">No matching historical records found.</td></tr>';
             } else {
                 filteredTrades.forEach(t => {
                     const row = document.createElement('tr');
-                    row.className = 'hover:bg-zinc-900/30 transition duration-150';
+                    row.className = 'hover:bg-gray-50/30 transition';
                     
                     const time = new Date(t.entry_time).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' });
-                    const pnlClass = t.pnl > 0 ? 'text-emerald-400 font-semibold font-mono' : (t.pnl < 0 ? 'text-rose-400 font-semibold font-mono' : 'text-zinc-500 font-mono');
+                    const pnlClass = t.pnl > 0 ? 'text-emerald-500 font-bold font-mono' : (t.pnl < 0 ? 'text-brand-orange font-bold font-mono' : 'text-gray-400 font-mono');
                     const pnlStr = t.status === 'open' ? '-' : `${t.pnl >= 0 ? '+' : ''}$${t.pnl.toFixed(2)}`;
                     
-                    let statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-500/10 text-amber-500 border border-amber-500/20">🟡 Open</span>';
+                    let statusBadge = '<span class="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-amber-50 text-amber-600 border border-amber-100">Open</span>';
                     if (t.status === 'closed') {
-                        statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">✅ Settled</span>';
+                        statusBadge = '<span class="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-emerald-50 text-emerald-600 border border-emerald-100">Settled</span>';
                     }
 
                     row.innerHTML = `
-                        <td class="py-3 px-4 font-mono text-zinc-500">#${t.id}</td>
-                        <td class="py-3 px-4 font-mono text-zinc-400">${time}</td>
-                        <td class="py-3 px-4 font-medium text-white truncate max-w-[250px]">${t.question}</td>
+                        <td class="py-3 px-4 font-mono text-gray-400">#${t.id}</td>
+                        <td class="py-3 px-4 font-mono text-gray-500">${time}</td>
+                        <td class="py-3 px-4 font-semibold text-gray-900 truncate max-w-[250px]" title="${t.question}">${t.question}</td>
                         <td class="py-3 px-4 text-center">
-                            <span class="${t.side === 'YES' ? 'text-brand-400 bg-brand-400/10 border-brand-400/20' : 'text-zinc-400 bg-zinc-400/10 border-zinc-400/20'} px-2 py-0.5 border rounded text-[10px] font-bold">${t.side}</span>
+                            <span class="${t.side === 'YES' ? 'text-brand-blue bg-blue-50 border-blue-100' : 'text-gray-500 bg-gray-50 border-gray-100'} px-2 py-0.5 border rounded-md text-[10px] font-bold">${t.side}</span>
                         </td>
-                        <td class="py-3 px-4 text-right text-zinc-300 font-mono">${t.shares}</td>
-                        <td class="py-3 px-4 text-right text-zinc-300 font-mono">$${t.entry_price.toFixed(2)}</td>
-                        <td class="py-3 px-4 text-right text-zinc-400 font-mono">$${t.btc_price ? t.btc_price.toLocaleString() : 'N/A'}</td>
-                        <td class="py-3 px-4 text-right text-zinc-300 font-mono">$${t.strike_price ? t.strike_price.toLocaleString() : 'N/A'}</td>
-                        <td class="py-3 px-4 text-right text-zinc-300 font-mono">${t.exit_price ? '$' + t.exit_price.toFixed(2) : '-'}</td>
-                        <td class="py-3 px-4 text-right 	extClass">	extStr</td>
+                        <td class="py-3 px-4 text-right text-gray-700 font-mono">${t.shares}</td>
+                        <td class="py-3 px-4 text-right text-gray-700 font-mono">$${t.entry_price.toFixed(2)}</td>
+                        <td class="py-3 px-4 text-right text-gray-400 font-mono">$${t.btc_price ? t.btc_price.toLocaleString() : 'N/A'}</td>
+                        <td class="py-3 px-4 text-right text-gray-700 font-mono">$${t.strike_price ? t.strike_price.toLocaleString() : 'N/A'}</td>
+                        <td class="py-3 px-4 text-right text-gray-700 font-mono">${t.exit_price ? '$' + t.exit_price.toFixed(2) : '-'}</td>
+                        <td class="py-3 px-4 text-right ${pnlClass}">${pnlStr}</td>
                         <td class="py-3 px-4 text-center">${statusBadge}</td>
-                    `.replace('textClass', pnlClass).replace('textStr', pnlStr);
+                    `;
                     
                     historyBody.appendChild(row);
                 });
             }
         }
 
-        // Hook search history filter
         document.getElementById('search-history').addEventListener('input', () => updateTables(allTrades));
         document.getElementById('filter-status').addEventListener('change', () => updateTables(allTrades));
 
-        // Generate Chart Options
         function renderDashboardCharts() {
-            // Process trades data to show progression
             const closedTrades = allTrades.filter(t => t.status === 'closed').reverse();
-            let cumulativePnL = 0;
-            const pnlData = [];
+            
+            // 1. Win Rate Gauge Chart
+            const winsCount = closedTrades.filter(t => t.pnl > 0).length;
+            const lossesCount = closedTrades.filter(t => t.pnl <= 0).length;
+            const winRate = closedTrades.length > 0 ? (winsCount / closedTrades.length) * 100 : 0;
+
+            document.getElementById('gauge-wins').innerText = winsCount;
+            document.getElementById('gauge-losses').innerText = lossesCount;
+
+            const gaugeOptions = {
+                chart: {
+                    type: 'radialBar',
+                    height: 250,
+                    offsetY: -10,
+                    sparkline: { enabled: true }
+                },
+                series: [winRate],
+                colors: ['#F04438'],
+                plotOptions: {
+                    radialBar: {
+                        startAngle: -95,
+                        endAngle: 95,
+                        track: {
+                            background: "#E4E7EC",
+                            strokeWidth: '85%',
+                            margin: 5
+                        },
+                        dataLabels: {
+                            name: { show: false },
+                            value: {
+                                offsetY: 25,
+                                fontSize: '26px',
+                                fontWeight: '800',
+                                color: '#0B192C',
+                                formatter: function (val) {
+                                    return val.toFixed(1) + "%";
+                                }
+                            }
+                        }
+                    }
+                },
+                grid: {
+                    padding: { top: -10 }
+                },
+                labels: ['Win Rate']
+            };
+
+            if (winRateGaugeInstance) {
+                winRateGaugeInstance.updateOptions(gaugeOptions);
+            } else {
+                winRateGaugeInstance = new ApexCharts(document.querySelector("#win-rate-gauge"), gaugeOptions);
+                winRateGaugeInstance.render();
+            }
+
+            // 2. Main Area Progression Chart (orange-red spline)
+            let runningSum = 0;
+            const pnlProgression = [];
             const labels = [];
             
-            // Limit to last 30 closed trades
             const recentClosed = closedTrades.slice(-30);
-            
-            recentClosed.forEach((t, i) => {
-                cumulativePnL += t.pnl;
-                pnlData.push(parseFloat(cumulativePnL.toFixed(2)));
-                labels.push(`Trade #${t.id}`);
+            recentClosed.forEach((t, idx) => {
+                runningSum += t.pnl;
+                pnlProgression.push(parseFloat(runningSum.toFixed(2)));
+                labels.push(`Snipe #${t.id}`);
             });
 
-            // 1. Performance Spline Chart
-            const chartOptions = {
+            const mainAreaOptions = {
                 chart: {
                     type: 'area',
-                    height: 320,
+                    height: 220,
                     toolbar: { show: false },
                     background: 'transparent',
-                    foreColor: '#71717a'
+                    fontFamily: 'Plus Jakarta Sans'
                 },
                 series: [{
-                    name: 'Cumulative P&L',
-                    data: pnlData
+                    name: 'Net P&L',
+                    data: pnlProgression
                 }],
-                colors: ['#8b5cf6'],
+                colors: ['#F04438'],
                 stroke: {
                     curve: 'smooth',
                     width: 3
@@ -692,19 +761,20 @@
                     gradient: {
                         shadeIntensity: 1,
                         opacityFrom: 0.35,
-                        opacityTo: 0.02,
+                        opacityTo: 0.0,
                         stops: [0, 95, 100]
                     }
                 },
                 grid: {
-                    borderColor: '#27272a',
+                    borderColor: '#F2F4F7',
                     strokeDashArray: 4,
-                    padding: { left: 10, right: 10 }
+                    padding: { left: 0, right: 0 }
                 },
                 xaxis: {
                     categories: labels,
                     axisBorder: { show: false },
-                    axisTicks: { show: false }
+                    axisTicks: { show: false },
+                    labels: { show: false }
                 },
                 yaxis: {
                     labels: {
@@ -714,143 +784,113 @@
                     }
                 },
                 tooltip: {
-                    theme: 'dark',
                     y: {
                         formatter: function (value) {
-                            return (value >= 0 ? '+' : '') + '$' + value.toFixed(2) + ' USDC';
+                            return (value >= 0 ? '+' : '') + '$' + value.toFixed(2);
                         }
                     }
                 }
             };
 
-            if (performanceChartInstance) {
-                performanceChartInstance.updateOptions(chartOptions);
+            if (mainAreaChartInstance) {
+                mainAreaChartInstance.updateOptions(mainAreaOptions);
             } else {
-                performanceChartInstance = new ApexCharts(document.querySelector("#performance-chart"), chartOptions);
-                performanceChartInstance.render();
+                mainAreaChartInstance = new ApexCharts(document.querySelector("#main-area-chart"), mainAreaOptions);
+                mainAreaChartInstance.render();
             }
 
-            // Stats computations for line chart header
-            if (closedTrades.length > 0) {
-                const pnls = closedTrades.map(t => t.pnl);
-                const best = Math.max(...pnls);
-                const worst = Math.min(...pnls);
-                const avg = pnls.reduce((a, b) => a + b, 0) / pnls.length;
-                document.getElementById('chart-best').innerText = `+$${best.toFixed(2)}`;
-                document.getElementById('chart-worst').innerText = `${worst < 0 ? '-' : ''}$${Math.abs(worst).toFixed(2)}`;
-                document.getElementById('chart-avg').innerText = `${avg >= 0 ? '+' : ''}$${avg.toFixed(2)}`;
-            }
+            // 3. User Retention Cohorts stylized segmented pillars (vertical columns wins/losses per crypto)
+            const cryptoTrades = { btc: 0, eth: 0, sol: 0, xrp: 0 };
+            const cryptoWins = { btc: 0, eth: 0, sol: 0, xrp: 0 };
+            
+            closedTrades.forEach(t => {
+                const q = t.question.toLowerCase();
+                let asset = '';
+                if (q.includes('bitcoin')) asset = 'btc';
+                else if (q.includes('ethereum')) asset = 'eth';
+                else if (q.includes('solana')) asset = 'sol';
+                else if (q.includes('xrp')) asset = 'xrp';
 
-            // 2. Win / Loss Donut
-            const winTrades = closedTrades.filter(t => t.pnl > 0).length;
-            const lossTrades = closedTrades.filter(t => t.pnl <= 0).length;
+                if (asset) {
+                    cryptoTrades[asset]++;
+                    if (t.pnl > 0) cryptoWins[asset]++;
+                }
+            });
 
-            const winLossOptions = {
-                chart: { type: 'donut', height: 160, background: 'transparent' },
-                series: [winTrades || 0, lossTrades || 0],
-                labels: ['Wins', 'Losses'],
-                colors: ['#10b981', '#f43f5e'],
-                dataLabels: { enabled: false },
-                legend: { show: false },
+            const cohortsOptions = {
+                chart: {
+                    type: 'bar',
+                    height: 220,
+                    stacked: true,
+                    toolbar: { show: false }
+                },
+                series: [
+                    {
+                        name: 'Wins',
+                        data: [cryptoWins.btc, cryptoWins.eth, cryptoWins.sol, cryptoWins.xrp]
+                    },
+                    {
+                        name: 'Losses',
+                        data: [
+                            cryptoTrades.btc - cryptoWins.btc,
+                            cryptoTrades.eth - cryptoWins.eth,
+                            cryptoTrades.sol - cryptoWins.sol,
+                            cryptoTrades.xrp - cryptoWins.xrp
+                        ]
+                    }
+                ],
+                colors: ['#F04438', '#0B192C'],
                 plotOptions: {
-                    pie: {
-                        donut: {
-                            size: '75%',
-                            background: 'transparent',
-                            labels: {
-                                show: true,
-                                name: { show: true, fontSize: '10px', color: '#71717a', offsetY: -5 },
-                                value: { show: true, fontSize: '14px', color: '#ffffff', offsetY: 5, formatter: val => val },
-                                total: {
-                                    show: true,
-                                    label: 'Win Rate',
-                                    fontSize: '9px',
-                                    color: '#71717a',
-                                    formatter: function (w) {
-                                        const total = w.globals.seriesTotals.reduce((a, b) => a + b, 0);
-                                        const rate = total > 0 ? (w.globals.series[0] / total) * 100 : 0;
-                                        return rate.toFixed(1) + '%';
-                                    }
-                                }
-                            }
-                        }
+                    bar: {
+                        borderRadius: 6,
+                        columnWidth: '40%',
+                        borderRadiusApplication: 'around'
                     }
                 },
-                tooltip: { theme: 'dark' }
-            };
-
-            if (winLossChartInstance) {
-                winLossChartInstance.updateOptions(winLossOptions);
-            } else {
-                winLossChartInstance = new ApexCharts(document.querySelector("#win-loss-donut"), winLossOptions);
-                winLossChartInstance.render();
-            }
-
-            // 3. Side Donut (YES vs NO)
-            const yesTrades = allTrades.filter(t => t.side === 'YES').length;
-            const noTrades = allTrades.filter(t => t.side === 'NO').length;
-
-            const sideOptions = {
-                chart: { type: 'donut', height: 160, background: 'transparent' },
-                series: [yesTrades || 0, noTrades || 0],
-                labels: ['YES', 'NO'],
-                colors: ['#8b5cf6', '#71717a'],
-                dataLabels: { enabled: false },
-                legend: { show: false },
-                plotOptions: {
-                    pie: {
-                        donut: {
-                            size: '75%',
-                            labels: {
-                                show: true,
-                                name: { show: true, fontSize: '10px', color: '#71717a', offsetY: -5 },
-                                value: { show: true, fontSize: '14px', color: '#ffffff', offsetY: 5, formatter: val => val },
-                                total: {
-                                    show: true,
-                                    label: 'YES Bias',
-                                    fontSize: '9px',
-                                    color: '#71717a',
-                                    formatter: function (w) {
-                                        const total = w.globals.seriesTotals.reduce((a, b) => a + b, 0);
-                                        const rate = total > 0 ? (w.globals.series[0] / total) * 100 : 0;
-                                        return rate.toFixed(0) + '%';
-                                    }
-                                }
-                            }
-                        }
+                grid: {
+                    borderColor: '#F2F4F7',
+                    strokeDashArray: 4
+                },
+                xaxis: {
+                    categories: ['BTC', 'ETH', 'SOL', 'XRP'],
+                    axisBorder: { show: false },
+                    axisTicks: { show: false }
+                },
+                yaxis: {
+                    labels: {
+                        formatter: val => Math.round(val)
                     }
                 },
-                tooltip: { theme: 'dark' }
+                legend: { show: false }
             };
 
-            if (sideChartInstance) {
-                sideChartInstance.updateOptions(sideOptions);
+            if (cohortsBarChartInstance) {
+                cohortsBarChartInstance.updateOptions(cohortsOptions);
             } else {
-                sideChartInstance = new ApexCharts(document.querySelector("#side-donut"), sideOptions);
-                sideChartInstance.render();
+                cohortsBarChartInstance = new ApexCharts(document.querySelector("#cohorts-bar-chart"), cohortsOptions);
+                cohortsBarChartInstance.render();
             }
         }
 
         function renderAnalyticsCharts() {
             const closedTrades = allTrades.filter(t => t.status === 'closed').reverse();
             
-            // Cumulative Profit (Yield Chart)
+            // Cumulative Profit Progression
             let runningSum = 0;
             const progression = closedTrades.map(t => {
                 runningSum += t.pnl;
                 return parseFloat(runningSum.toFixed(2));
             });
-            const tradeNumbers = closedTrades.map((t, idx) => `Trade #${t.id}`);
+            const tradeNumbers = closedTrades.map((t, idx) => `Snipe #${t.id}`);
 
             const yieldOptions = {
-                chart: { type: 'line', height: 280, toolbar: { show: false }, background: 'transparent', foreColor: '#71717a' },
+                chart: { type: 'line', height: 280, toolbar: { show: false }, foreColor: '#98A2B3' },
                 series: [{ name: 'Cumulative P&L', data: progression }],
-                colors: ['#10b981'],
+                colors: ['#14B8A6'],
                 stroke: { curve: 'smooth', width: 3 },
-                grid: { borderColor: '#27272a', strokeDashArray: 4 },
+                grid: { borderColor: '#E4E7EC', strokeDashArray: 4 },
                 xaxis: { categories: tradeNumbers, axisBorder: { show: false }, axisTicks: { show: false } },
-                yaxis: { labels: { formatter: val => '$' + val.toFixed(2) } },
-                tooltip: { theme: 'dark' }
+                yaxis: { labels: { formatter: val => '$' + val.toFixed(2) } }
             };
 
             if (yieldChartInstance) {
@@ -874,7 +914,7 @@
             // Avg Win Streak (wins before loss)
             let winStreaks = [];
             let currentStr = 0;
-            const chronoClosed = [...closedTrades].reverse(); // closedTrades is newest-first, reverse to make it oldest-first
+            const chronoClosed = [...closedTrades].reverse();
             
             chronoClosed.forEach(t => {
                 if (t.pnl > 0) {
@@ -891,6 +931,7 @@
             }
             const avgWinStr = winStreaks.length > 0 ? winStreaks.reduce((a, b) => a + b, 0) / winStreaks.length : 0;
             document.getElementById('analytics-avg-win-streak').innerText = `${avgWinStr.toFixed(1)} wins`;
+            document.getElementById('gauge-streak').innerText = `${avgWinStr.toFixed(1)}`;
 
             // Win/Loss average sizes
             const wins = closedTrades.filter(t => t.pnl > 0).map(t => t.pnl);
@@ -903,7 +944,6 @@
             document.getElementById('analytics-avg-loss').innerText = `${avgLoss < 0 ? '-' : ''}$${Math.abs(avgLoss).toFixed(2)}`;
 
             // PnL range distribution
-            // Group by buckets: <-$0.50, -$0.50 to $0, $0 to $0.50, >$0.50
             const buckets = [0, 0, 0, 0];
             closedTrades.forEach(t => {
                 if (t.pnl < -0.2) buckets[0]++;
@@ -913,24 +953,23 @@
             });
 
             const distOptions = {
-                chart: { type: 'bar', height: 280, toolbar: { show: false }, background: 'transparent', foreColor: '#71717a' },
+                chart: { type: 'bar', height: 280, toolbar: { show: false }, foreColor: '#98A2B3' },
                 series: [{ name: 'Count', data: buckets }],
-                colors: ['#6366f1'],
+                colors: ['#0B192C'],
                 plotOptions: {
                     bar: {
                         borderRadius: 4,
                         horizontal: false,
-                        columnWidth: '55%',
+                        columnWidth: '50%',
                     }
                 },
-                grid: { borderColor: '#27272a', strokeDashArray: 4 },
+                grid: { borderColor: '#E4E7EC', strokeDashArray: 4 },
                 xaxis: {
                     categories: ['<-$0.20', '-$0.20 to $0', '$0 to $0.20', '>$0.20'],
                     axisBorder: { show: false },
                     axisTicks: { show: false }
                 },
-                yaxis: { labels: { formatter: val => Math.round(val) } },
-                tooltip: { theme: 'dark' }
+                yaxis: { labels: { formatter: val => Math.round(val) } }
             };
 
             if (distChartInstance) {
@@ -941,6 +980,5 @@
             }
         }
     </script>
-
 </body>
 </html>
