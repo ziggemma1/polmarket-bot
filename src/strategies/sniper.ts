@@ -305,7 +305,8 @@ async function executeSnipe(market: any, ticker: 'btc' | 'eth' | 'sol' | 'bnb'):
         const tradingLimit = config?.tradingLimit || 1.00;
         let shares = Math.floor(tradingLimit / entryPrice) || 1;
 
-        // Custom BTC Sizing Logic: If BTC spot price is $70+ above or below the strike price, boost position size to 10 shares
+        // Custom Sizing Logic per Crypto:
+        // Bitcoin (BTC): If BTC spot price is $70+ above or below the strike price, boost position size to 10 shares
         if (ticker === 'btc') {
             const priceGap = Math.abs(priceValue - strikePrice);
             if (priceGap >= 70) {
@@ -313,6 +314,16 @@ async function executeSnipe(market: any, ticker: 'btc' | 'eth' | 'sol' | 'bnb'):
                 console.log(`[Sniper] 🚀 BTC Custom Strategy Met: Price gap is $${priceGap.toFixed(2)} (>= $70). Boosting position size to 10 shares!`);
             } else {
                 console.log(`[Sniper] ℹ️ BTC Price gap is $${priceGap.toFixed(2)} (< $70). Standard ${shares} share.`);
+            }
+        }
+        // Ethereum (ETH): If ETH spot price is $5+ above or below the strike price, boost position size to 10 shares
+        else if (ticker === 'eth') {
+            const priceGap = Math.abs(priceValue - strikePrice);
+            if (priceGap >= 5) {
+                shares = 10;
+                console.log(`[Sniper] 🚀 ETH Custom Strategy Met: Price gap is $${priceGap.toFixed(2)} (>= $5). Boosting position size to 10 shares!`);
+            } else {
+                console.log(`[Sniper] ℹ️ ETH Price gap is $${priceGap.toFixed(2)} (< $5). Standard ${shares} share.`);
             }
         }
 
