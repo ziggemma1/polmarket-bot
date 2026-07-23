@@ -92,23 +92,26 @@ async function settleExpiredPositions() {
                 }
             } catch (err) {}
 
-            // 2. If Polymarket has not closed/resolved yet, resolve via Binance Vision 5m Candle Close Price
+            // 2. If Polymarket has not closed/resolved yet, resolve strictly via exact 5m Candle Close Price
             if (!resolvedViaPolymarket) {
                 try {
-                    const bvRes = await fetch(`https://data-api.binance.vision/api/v3/klines?symbol=${ticker.toUpperCase()}USDT&interval=5m&limit=10`);
+                    const expiryMs = new Date(position.expiry_time).getTime();
+                    const startTimestampSec = Math.floor((expiryMs - 300000) / 1000);
+
+                    const bvRes = await fetch(`https://data-api.binance.vision/api/v3/klines?symbol=${ticker.toUpperCase()}USDT&interval=5m&limit=20`);
                     const bvKlines = await bvRes.json();
                     if (Array.isArray(bvKlines) && bvKlines.length > 0) {
-                        // Get latest completed 5m candle close price
-                        const latestCandle = bvKlines[bvKlines.length - 1];
-                        if (latestCandle) {
-                            if (!strikePrice) strikePrice = parseFloat(latestCandle[1]); // Index 1 is Open price
-                            closePrice = parseFloat(latestCandle[4]); // Index 4 is Close price
-                            console.log(`[Sniper] Expiry ${ticker.toUpperCase()} Binance Vision 5m Candle: Open=$${strikePrice}, Close=$${closePrice}`);
+                        // Find EXACT candle whose open time matches market startTimestampSec
+                        const exactCandle = bvKlines.find((k: any) => Math.floor(k[0] / 1000) === startTimestampSec);
+                        if (exactCandle) {
+                            strikePrice = parseFloat(exactCandle[1]); // Index 1 is Open price (priceStart)
+                            closePrice = parseFloat(exactCandle[4]);  // Index 4 is Close price (priceEnd)
+                            console.log(`[Sniper] ✅ Exact 5m Candle Match for ${ticker.toUpperCase()} (timestamp ${startTimestampSec}): Open=$${strikePrice}, Close=$${closePrice}`);
                         }
                     }
                 } catch (err) {}
 
-                // Fallback to CoinGecko live spot price if Binance Vision fails
+                // Fallback to CoinGecko live spot price ONLY if Binance Vision candle is missing
                 if (!closePrice || isNaN(closePrice)) {
                     try {
                         const cgId = cgMap[ticker] || ticker;
@@ -128,21 +131,6 @@ async function settleExpiredPositions() {
                     } else {
                         exitPrice = 0.00;
                         outcome = '🔴 LOSS';
-                    }
-                } else if (closePrice > 0) {
-                    // Fallback comparison with entry asset price if strike missing
-                    const entryPriceRef = position.btc_price || 0;
-                    if (entryPriceRef > 0) {
-                        if (position.side === 'YES' && closePrice > entryPriceRef) {
-                            exitPrice = 1.00;
-                            outcome = '🟢 WIN';
-                        } else if (position.side === 'NO' && closePrice < entryPriceRef) {
-                            exitPrice = 1.00;
-                            outcome = '🟢 WIN';
-                        } else {
-                            exitPrice = 0.00;
-                            outcome = '🔴 LOSS';
-                        }
                     }
                 }
             }
