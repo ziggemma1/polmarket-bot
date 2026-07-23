@@ -299,29 +299,26 @@ async function executeSnipe(market: any, ticker: 'btc' | 'eth' | 'sol' | 'bnb'):
         }
         console.log(`[Sniper] ${ticker.toUpperCase()} Spot Price: $${priceValue}`);
 
-        // 2. Fetch the strike price (open price of the 5m candle) from Binance Vision API (failsafe across all regions)
+        // 2. Fetch the strike price (open price of the 5m candle) from Binance Vision API (STRICT MATCH ONLY)
         let strikePrice = 0;
         const startTimestamp = parseInt(market.slug.split('-').pop() || '0');
         
         try {
             if (startTimestamp > 0) {
-                const bvResponse = await fetch(`https://data-api.binance.vision/api/v3/klines?symbol=${ticker.toUpperCase()}USDT&interval=5m&limit=10`);
+                const bvResponse = await fetch(`https://data-api.binance.vision/api/v3/klines?symbol=${ticker.toUpperCase()}USDT&interval=5m&limit=20`);
                 const bvKlines = await bvResponse.json();
                 if (Array.isArray(bvKlines)) {
-                    let candle = bvKlines.find((k: any) => Math.floor(k[0] / 1000) === startTimestamp);
-                    if (!candle && bvKlines.length > 0) {
-                        // Fallback to closest 5m open candle
-                        candle = bvKlines[bvKlines.length - 1];
-                    }
+                    // STRICT MATCH: exact candle open timestamp must match market startTimestamp
+                    const candle = bvKlines.find((k: any) => Math.floor(k[0] / 1000) === startTimestamp);
                     if (candle) {
-                        strikePrice = parseFloat(candle[1]); // Index 1 is open price in Binance Vision klines
-                        console.log(`[Sniper] Found Binance Vision candle for ${ticker.toUpperCase()} start timestamp ${startTimestamp}. Open price: $${strikePrice}`);
+                        strikePrice = parseFloat(candle[1]); // Index 1 is open price
+                        console.log(`[Sniper] ✅ Strict Binance Vision candle match for ${ticker.toUpperCase()} (timestamp ${startTimestamp}). Open price: $${strikePrice}`);
                     }
                 }
             }
         } catch (e: any) {}
 
-        // Fallback to Coinbase Exchange candles for BTC/ETH/SOL if missing
+        // Fallback to Coinbase Exchange candles for BTC/ETH/SOL ONLY if timestamp strictly matches
         if (!strikePrice || isNaN(strikePrice)) {
             try {
                 if (startTimestamp > 0) {
@@ -333,17 +330,18 @@ async function executeSnipe(market: any, ticker: 'btc' | 'eth' | 'sol' | 'bnb'):
                         const candle = klines.find((k: any) => k[0] === startTimestamp);
                         if (candle) {
                             strikePrice = parseFloat(candle[3]); // Index 3 is open price
-                            console.log(`[Sniper] Found Coinbase candle for ${ticker.toUpperCase()} start timestamp ${startTimestamp}. Open price: $${strikePrice}`);
+                            console.log(`[Sniper] ✅ Strict Coinbase candle match for ${ticker.toUpperCase()} (timestamp ${startTimestamp}). Open price: $${strikePrice}`);
                         }
                     }
                 }
             } catch (e: any) {}
         }
 
-        if (!strikePrice || isNaN(strikePrice)) {
-            return { success: false, error: `Could not fetch candle strike price for ${ticker.toUpperCase()}` };
+        // STRICT NO-FALLBACK GUARD: Abort execution if exact 5m candle strike price is missing
+        if (!strikePrice || isNaN(strikePrice) || strikePrice <= 0) {
+            return { success: false, error: `Exact 5m candle strike price (timestamp ${startTimestamp}) not found for ${ticker.toUpperCase()}` };
         }
-        console.log(`[Sniper] Final Strike Price: $${strikePrice}`);
+        console.log(`[Sniper] Verified Strike Price: $${strikePrice}`);
 
         // 3. Determine winning side
         const side = priceValue > strikePrice ? 'YES' : 'NO';
