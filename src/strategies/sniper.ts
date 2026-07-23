@@ -34,94 +34,123 @@ const SNIPE_WINDOW = 12; // 12 seconds before expiry (T-12s window)
 
 async function settleExpiredPositions() {
     try {
-        if (!config) return;
         const paperTrader = await getPaperTrader();
-        const openPositions = paperTrader.getOpenPositions();
+        if (!paperTrader) return;
 
-        if (openPositions.length === 0) {
-            return;
-        }
+        const openPositions = paperTrader.getOpenPositions();
+        if (openPositions.length === 0) return;
 
         const now = Date.now();
         const expired = openPositions.filter(pos => pos.expiry_time && now >= new Date(pos.expiry_time).getTime());
-
-        if (expired.length === 0) {
-            return;
-        }
+        if (expired.length === 0) return;
 
         console.log(`[Sniper] Found ${expired.length} expired paper positions. Resolving outcomes...`);
 
-        // Cache prices to avoid multiple fetches for the same ticker
-        const priceCache: { [key: string]: number | null } = { btc: null, eth: null, sol: null, bnb: null };
-        const getPrice = async (t: 'btc' | 'eth' | 'sol' | 'bnb') => {
-            if (priceCache[t] !== null) return priceCache[t];
-            try {
-                const response = await fetch(`https://api.coinbase.com/v2/prices/${t.toUpperCase()}-USD/spot`);
-                const data = await response.json();
-                const price = parseFloat(data?.data?.amount);
-                if (price && !isNaN(price)) {
-                    console.log(`[Sniper] Expiry ${t.toUpperCase()} Price from Coinbase: $${price}`);
-                    priceCache[t] = price;
-                    return price;
-                }
-            } catch (err) {
-                // Ignore and try fallback
-            }
-
-            try {
-                const response = await fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${t.toUpperCase()}USDT`);
-                const data = await response.json();
-                const price = parseFloat(data?.price);
-                if (price && !isNaN(price)) {
-                    console.log(`[Sniper] Expiry ${t.toUpperCase()} Price from Binance: $${price}`);
-                    priceCache[t] = price;
-                    return price;
-                }
-            } catch (err) {
-                console.error(`[Sniper] Failed to fetch ${t.toUpperCase()} price for instant settlement:`, err);
-            }
-
-            return null;
+        const cgMap: { [key: string]: string } = {
+            btc: 'bitcoin',
+            eth: 'ethereum',
+            sol: 'solana',
+            bnb: 'binancecoin'
         };
 
         for (const position of expired) {
-            console.log(`[Sniper] 🔄 Settling expired position ${position.id} instantly...`);
+            console.log(`[Sniper] 🔄 Settling expired position ${position.id} (${position.question})...`);
 
             // Parse ticker from question text
             let ticker: 'btc' | 'eth' | 'sol' | 'bnb' = 'btc';
             const q = (position.question || '').toLowerCase();
-            if (q.includes('ethereum') || q.includes('eth')) {
-                ticker = 'eth';
-            } else if (q.includes('solana') || q.includes('sol')) {
-                ticker = 'sol';
-            } else if (q.includes('bnb') || q.includes('binance')) {
-                ticker = 'bnb';
-            }
+            if (q.includes('ethereum') || q.includes('eth')) ticker = 'eth';
+            else if (q.includes('solana') || q.includes('sol')) ticker = 'sol';
+            else if (q.includes('bnb') || q.includes('binance')) ticker = 'bnb';
 
-            const price = await getPrice(ticker);
-
+            let strikePrice = position.strike_price || 0;
+            let closePrice = 0;
+            let resolvedViaPolymarket = false;
             let exitPrice = 0.00;
-            let outcome = '❌ LOSS';
+            let outcome = '🔴 LOSS';
 
-            if (price !== null) {
-                const strikePrice = position.strike_price || 0;
-                if (position.side === 'YES' && price > strikePrice) {
-                    exitPrice = 1.00;
-                    outcome = 'WIN';
-                } else if (position.side === 'NO' && price < strikePrice) {
-                    exitPrice = 1.00;
-                    outcome = 'WIN';
+            // 1. Try fetching official Polymarket resolution status first
+            try {
+                const polyRes = await fetch(`https://gamma-api.polymarket.com/markets/${position.marketId}`);
+                const polyMarket = await polyRes.json();
+                if (polyMarket && polyMarket.closed && polyMarket.outcomePrices) {
+                    const outcomePrices = typeof polyMarket.outcomePrices === 'string' 
+                        ? JSON.parse(polyMarket.outcomePrices) 
+                        : polyMarket.outcomePrices;
+                    const yesWon = parseFloat(outcomePrices[0] || '0') > 0.5;
+                    const noWon = parseFloat(outcomePrices[1] || '0') > 0.5;
+
+                    if ((position.side === 'YES' && yesWon) || (position.side === 'NO' && noWon)) {
+                        exitPrice = 1.00;
+                        outcome = '🟢 WIN';
+                    } else {
+                        exitPrice = 0.00;
+                        outcome = '🔴 LOSS';
+                    }
+                    resolvedViaPolymarket = true;
+                    console.log(`[Sniper] Resolved position ${position.id} via official Polymarket API: ${outcome}`);
+                }
+            } catch (err) {}
+
+            // 2. If Polymarket has not closed/resolved yet, resolve via Binance Vision 5m Candle Close Price
+            if (!resolvedViaPolymarket) {
+                try {
+                    const bvRes = await fetch(`https://data-api.binance.vision/api/v3/klines?symbol=${ticker.toUpperCase()}USDT&interval=5m&limit=10`);
+                    const bvKlines = await bvRes.json();
+                    if (Array.isArray(bvKlines) && bvKlines.length > 0) {
+                        // Get latest completed 5m candle close price
+                        const latestCandle = bvKlines[bvKlines.length - 1];
+                        if (latestCandle) {
+                            if (!strikePrice) strikePrice = parseFloat(latestCandle[1]); // Index 1 is Open price
+                            closePrice = parseFloat(latestCandle[4]); // Index 4 is Close price
+                            console.log(`[Sniper] Expiry ${ticker.toUpperCase()} Binance Vision 5m Candle: Open=$${strikePrice}, Close=$${closePrice}`);
+                        }
+                    }
+                } catch (err) {}
+
+                // Fallback to CoinGecko live spot price if Binance Vision fails
+                if (!closePrice || isNaN(closePrice)) {
+                    try {
+                        const cgId = cgMap[ticker] || ticker;
+                        const cgRes = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${cgId}&vs_currencies=usd`);
+                        const cgData = await cgRes.json();
+                        closePrice = parseFloat(cgData?.[cgId]?.usd);
+                    } catch (err) {}
+                }
+
+                if (closePrice > 0 && strikePrice > 0) {
+                    if (position.side === 'YES' && closePrice > strikePrice) {
+                        exitPrice = 1.00;
+                        outcome = '🟢 WIN';
+                    } else if (position.side === 'NO' && closePrice < strikePrice) {
+                        exitPrice = 1.00;
+                        outcome = '🟢 WIN';
+                    } else {
+                        exitPrice = 0.00;
+                        outcome = '🔴 LOSS';
+                    }
+                } else if (closePrice > 0) {
+                    // Fallback comparison with entry asset price if strike missing
+                    const entryPriceRef = position.btc_price || 0;
+                    if (entryPriceRef > 0) {
+                        if (position.side === 'YES' && closePrice > entryPriceRef) {
+                            exitPrice = 1.00;
+                            outcome = '🟢 WIN';
+                        } else if (position.side === 'NO' && closePrice < entryPriceRef) {
+                            exitPrice = 1.00;
+                            outcome = '🟢 WIN';
+                        } else {
+                            exitPrice = 0.00;
+                            outcome = '🔴 LOSS';
+                        }
+                    }
                 }
             }
-
-            const pnl = exitPrice === 1.00 
-                ? (position.shares * 1.00) - (position.shares * position.entry_price)
-                : -(position.shares * position.entry_price);
 
             const result = await paperTrader.closePosition(position.id, exitPrice);
             if (result.success) {
                 const pnl = result.pnl || 0;
-                console.log(`[Sniper] Settled position ${position.id} (${position.question}): ${outcome} (PnL: $${pnl.toFixed(2)})`);
+                console.log(`[Sniper] Settled position ${position.id} (${position.question}): ${outcome} (ExitPrice: $${exitPrice}, PnL: $${pnl.toFixed(2)})`);
 
                 if (config?.telegramService) {
                     config.telegramService.sendAlert(
