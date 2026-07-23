@@ -114,6 +114,10 @@
                     <span class="w-2 h-2 rounded-full bg-emerald-500" id="header-status-indicator"></span>
                     <span id="header-mode-text">PAPER MODE</span>
                 </div>
+                <!-- Reset Balance Button -->
+                <button onclick="resetPaperBalance()" class="bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition">
+                    <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i> Reset Balance ($10k)
+                </button>
             </div>
 
             <!-- Profile Info -->
@@ -526,6 +530,19 @@
                 lucide.createIcons();
             } catch (err) {
                 console.error("Error fetching data:", err);
+            }
+        }
+
+        async function resetPaperBalance() {
+            if (confirm("Are you sure you want to reset your paper trading balance back to $10,000.00 USDC?")) {
+                try {
+                    const res = await fetch('/api/reset', { method: 'POST' });
+                    const data = await res.json();
+                    alert(data.message || "Balance reset to $10,000.00");
+                    fetchData();
+                } catch (e) {
+                    alert("Reset failed: " + e.message);
+                }
             }
         }
 

@@ -50,7 +50,7 @@ export class TelegramService {
           [{ text: '/paper on' }, { text: '/paper off' }],
           [{ text: '/markets' }, { text: '/recent' }],
           [{ text: '/close all' }, { text: '/paper balance' }],
-          [{ text: '/help' }]
+          [{ text: '/resetbalance' }, { text: '/help' }]
         ],
         resize_keyboard: true,
         one_time_keyboard: false
@@ -105,7 +105,7 @@ export class TelegramService {
           { parse_mode: 'Markdown', ...mainKeyboard }
         );
       } else if (cmd === 'reset') {
-        this.paperTrader.reset();
+        await this.paperTrader.reset();
         this.bot.sendMessage(msg.chat.id, "🔄 Paper trading state has been reset to $10,000.", mainKeyboard);
       } else if (cmd === 'history') {
         const history = this.paperTrader.getHistory(10);
@@ -118,6 +118,12 @@ export class TelegramService {
         ).join('\n');
         this.bot.sendMessage(msg.chat.id, `🕒 *Recent Paper Trades*\n\n${historyText}`, { parse_mode: 'Markdown', ...mainKeyboard });
       }
+    });
+
+    this.bot.onText(/\/(resetbalance|resetpaper|reset)/, async (msg) => {
+      if (!this.checkWhitelist(msg)) return;
+      await this.paperTrader.reset();
+      this.bot.sendMessage(msg.chat.id, "🔄 *Paper Trading Reset Complete*\n\nYour paper trading balance has been reset to **$10,000.00 USDC** and all trade history cleared.", { parse_mode: 'Markdown', ...mainKeyboard });
     });
 
     this.bot.onText(/\/status/, async (msg) => {

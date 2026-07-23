@@ -290,6 +290,32 @@ app.get('/api/stats', (req, res) => {
   }
 });
 
+app.post('/api/reset', async (req, res) => {
+  try {
+    if (paperTrader) {
+      await paperTrader.reset();
+      res.json({ success: true, message: 'Paper trading balance reset to $10,000' });
+    } else {
+      res.status(400).json({ success: false, error: 'Paper trader not initialized' });
+    }
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.get('/api/reset', async (req, res) => {
+  try {
+    if (paperTrader) {
+      await paperTrader.reset();
+      res.json({ success: true, message: 'Paper trading balance reset to $10,000' });
+    } else {
+      res.status(400).json({ success: false, error: 'Paper trader not initialized' });
+    }
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 app.get('/status', async (req, res) => {
   try {
     let paperStats = { balance: 0, totalTrades: 0, winRate: 0, totalPnL: 0 };
