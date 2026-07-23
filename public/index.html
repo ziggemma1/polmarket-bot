@@ -593,10 +593,10 @@
             if (gridContainer) {
                 gridContainer.innerHTML = '';
                 const assets = [
-                    { id: 'btc', name: 'Bitcoin', symbol: 'BTC', threshold: '$70.00', bg: 'bg-amber-50', border: 'border-amber-100', text: 'text-amber-600' },
-                    { id: 'eth', name: 'Ethereum', symbol: 'ETH', threshold: '$5.00', bg: 'bg-indigo-50', border: 'border-indigo-100', text: 'text-indigo-600' },
-                    { id: 'sol', name: 'Solana', symbol: 'SOL', threshold: '$0.19', bg: 'bg-emerald-50', border: 'border-emerald-100', text: 'text-emerald-600' },
-                    { id: 'bnb', name: 'Binance Coin', symbol: 'BNB', threshold: '$0.60', bg: 'bg-yellow-50', border: 'border-yellow-100', text: 'text-yellow-600' }
+                    { id: 'btc', name: 'Bitcoin', symbol: 'BTC', noiseGuard: '$10.00', threshold: '$70.00', bg: 'bg-amber-50', border: 'border-amber-100', text: 'text-amber-600' },
+                    { id: 'eth', name: 'Ethereum', symbol: 'ETH', noiseGuard: '$0.90', threshold: '$5.00', bg: 'bg-indigo-50', border: 'border-indigo-100', text: 'text-indigo-600' },
+                    { id: 'sol', name: 'Solana', symbol: 'SOL', noiseGuard: '$0.05', threshold: '$0.19', bg: 'bg-emerald-50', border: 'border-emerald-100', text: 'text-emerald-600' },
+                    { id: 'bnb', name: 'Binance Coin', symbol: 'BNB', noiseGuard: '$0.03', threshold: '$0.60', bg: 'bg-yellow-50', border: 'border-yellow-100', text: 'text-yellow-600' }
                 ];
 
                 assets.forEach(asset => {
@@ -638,9 +638,9 @@
                                 <div class="h-full bg-emerald-500 transition-all duration-300" style="width: ${data.winRate}%"></div>
                                 <div class="h-full bg-brand-orange transition-all duration-300" style="width: ${100 - data.winRate}%"></div>
                             </div>
-                            <div class="flex justify-between text-[10px] text-gray-400 font-medium pt-0.5">
+                            <div class="flex justify-between text-[9px] text-gray-400 font-medium pt-0.5">
                                 <span>🟢 ${data.wins}W / 🔴 ${data.losses}L</span>
-                                <span class="font-mono text-gray-400">Threshold: ${asset.threshold}</span>
+                                <span class="font-mono text-gray-400">Min: >${asset.noiseGuard} | Boost: ${asset.threshold}</span>
                             </div>
                         </div>
 

@@ -227,6 +227,20 @@ async function fetchStrikePrice(market: any, ticker: 'btc' | 'eth' | 'sol' | 'bn
     return strikePrice;
 }
 
+const MIN_GAP_THRESHOLDS: { [key in 'btc' | 'eth' | 'sol' | 'bnb']: number } = {
+    btc: 10.00,
+    eth: 0.90,
+    sol: 0.05,
+    bnb: 0.03
+};
+
+const BOOST_GAP_THRESHOLDS: { [key in 'btc' | 'eth' | 'sol' | 'bnb']: number } = {
+    btc: 70.00,
+    eth: 5.00,
+    sol: 0.19,
+    bnb: 0.60
+};
+
 async function evaluateSizingAtT12(market: any, ticker: 'btc' | 'eth' | 'sol' | 'bnb'): Promise<number> {
     try {
         const spotPrice = await fetchSpotPrice(ticker);
@@ -234,30 +248,19 @@ async function evaluateSizingAtT12(market: any, ticker: 'btc' | 'eth' | 'sol' | 
         if (!spotPrice || !strikePrice) return 1;
 
         const priceGap = Math.abs(spotPrice - strikePrice);
-        let shares = 1;
+        const minGap = MIN_GAP_THRESHOLDS[ticker];
+        const boostGap = BOOST_GAP_THRESHOLDS[ticker];
 
-        if (ticker === 'btc') {
-            if (priceGap <= 10) {
-                console.log(`[Sniper] 🛑 T-12s BTC Gap $${priceGap.toFixed(2)} (<= $10.00 noise band) -> Minimum Gap Guard Active (Will Skip at T-10s)`);
-            } else if (priceGap >= 70) {
-                shares = 10;
-                console.log(`[Sniper] ⏱️ T-12s BTC Gap $${priceGap.toFixed(2)} (>= $70) -> Position size set to 10 shares`);
-            } else {
-                console.log(`[Sniper] ⏱️ T-12s BTC Gap $${priceGap.toFixed(2)} (Standard 1 share)`);
-            }
-        } else if (ticker === 'eth' && priceGap >= 5) {
-            shares = 10;
-            console.log(`[Sniper] ⏱️ T-12s ETH Gap $${priceGap.toFixed(2)} (>= $5) -> Position size set to 10 shares`);
-        } else if (ticker === 'sol' && priceGap >= 0.19) {
-            shares = 10;
-            console.log(`[Sniper] ⏱️ T-12s SOL Gap $${priceGap.toFixed(2)} (>= $0.19) -> Position size set to 10 shares`);
-        } else if (ticker === 'bnb' && priceGap >= 0.60) {
-            shares = 10;
-            console.log(`[Sniper] ⏱️ T-12s BNB Gap $${priceGap.toFixed(2)} (>= $0.60) -> Position size set to 10 shares`);
+        if (priceGap <= minGap) {
+            console.log(`[Sniper] 🛑 T-12s ${ticker.toUpperCase()} Gap $${priceGap.toFixed(4)} (<= $${minGap} noise band) -> Minimum Gap Guard Active (Will Skip at T-10s)`);
+            return 1;
+        } else if (priceGap >= boostGap) {
+            console.log(`[Sniper] ⏱️ T-12s ${ticker.toUpperCase()} Gap $${priceGap.toFixed(4)} (>= $${boostGap}) -> Position size set to 10 shares`);
+            return 10;
         } else {
-            console.log(`[Sniper] ⏱️ T-12s ${ticker.toUpperCase()} Gap $${priceGap.toFixed(2)} -> Standard 1 share`);
+            console.log(`[Sniper] ⏱️ T-12s ${ticker.toUpperCase()} Gap $${priceGap.toFixed(4)} -> Standard 1 share`);
+            return 1;
         }
-        return shares;
     } catch (e) {
         return 1;
     }
@@ -369,11 +372,12 @@ async function executeSnipe(market: any, ticker: 'btc' | 'eth' | 'sol' | 'bnb', 
         }
         console.log(`[Sniper] Verified Strike Price: $${strikePrice}`);
 
-        // MINIMUM GAP GUARD FOR BTC: If price gap <= $10.00, abort trade execution immediately
+        // MINIMUM GAP GUARD FOR ALL 4 CRYPTOS: If price gap <= minGap, abort trade execution immediately
         const priceGap = Math.abs(priceValue - strikePrice);
-        if (ticker === 'btc' && priceGap <= 10) {
-            console.log(`[Sniper] 🛑 BTC Minimum Gap Guard Triggered: Price gap is $${priceGap.toFixed(2)} (<= $10.00 noise band). Skipping trade.`);
-            return { success: false, error: `BTC Price gap $${priceGap.toFixed(2)} is within $10.00 noise band. Execution skipped.` };
+        const minGap = MIN_GAP_THRESHOLDS[ticker];
+        if (priceGap <= minGap) {
+            console.log(`[Sniper] 🛑 ${ticker.toUpperCase()} Minimum Gap Guard Triggered: Price gap is $${priceGap.toFixed(4)} (<= $${minGap} noise band). Skipping trade.`);
+            return { success: false, error: `${ticker.toUpperCase()} Price gap $${priceGap.toFixed(4)} is within $${minGap} noise band. Execution skipped.` };
         }
 
         // 3. Determine winning side at T-10s
