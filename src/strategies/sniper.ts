@@ -326,6 +326,16 @@ async function executeSnipe(market: any, ticker: 'btc' | 'eth' | 'sol' | 'bnb'):
                 console.log(`[Sniper] ℹ️ ETH Price gap is $${priceGap.toFixed(2)} (< $5). Standard ${shares} share.`);
             }
         }
+        // Solana (SOL): If SOL spot price is $0.19+ above or below the strike price, boost position size to 10 shares
+        else if (ticker === 'sol') {
+            const priceGap = Math.abs(priceValue - strikePrice);
+            if (priceGap >= 0.19) {
+                shares = 10;
+                console.log(`[Sniper] 🚀 SOL Custom Strategy Met: Price gap is $${priceGap.toFixed(2)} (>= $0.19). Boosting position size to 10 shares!`);
+            } else {
+                console.log(`[Sniper] ℹ️ SOL Price gap is $${priceGap.toFixed(2)} (< $0.19). Standard ${shares} share.`);
+            }
+        }
 
         // 5. Execute the trade
         if (config?.paperMode) {
