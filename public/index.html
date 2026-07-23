@@ -223,12 +223,12 @@
 
             <!-- RIGHT COLUMN: MAIN CHARTS & BREAKDOWNS -->
             <div class="lg:col-span-2 space-y-8">
-                <!-- Target Sales Breakdown Card (ApexChart Line & Horizontal progress) -->
+                <!-- P&L Progression Chart Card -->
                 <div class="bg-white border border-gray-100 rounded-2xl p-6 card-shadow">
-                    <div class="flex justify-between items-center mb-6">
+                    <div class="flex justify-between items-center mb-4">
                         <div class="flex items-center gap-2">
-                            <i data-lucide="bar-chart-2" class="w-4 h-4 text-brand-navy"></i>
-                            <h4 class="text-sm font-bold text-gray-900">Target Sales Breakdown</h4>
+                            <i data-lucide="trending-up" class="w-4 h-4 text-brand-navy"></i>
+                            <h4 class="text-sm font-bold text-gray-900">P&L Progression</h4>
                         </div>
                         
                         <!-- Date filters and Custom Inputs -->
@@ -250,69 +250,8 @@
                         </div>
                     </div>
 
-                    <div class="grid grid-cols-1 md:grid-cols-5 gap-8">
-                        <!-- Horizontal Progress Bars breakdown (1.5/5 cols) -->
-                        <div class="md:col-span-1.5 space-y-6">
-                            <!-- Progress breakdown list -->
-                            <div class="space-y-4" id="crypto-progress-container">
-                                <!-- BTC Progress -->
-                                <div>
-                                    <div class="flex justify-between text-xs font-semibold mb-1">
-                                        <span class="text-gray-600">Bitcoin (BTC)</span>
-                                        <span class="text-brand-navy font-mono" id="pnl-btc">+$0.00</span>
-                                    </div>
-                                    <div class="w-full bg-gray-100 rounded-full h-4 overflow-hidden relative">
-                                        <div id="bar-btc" class="bg-brand-orange h-full rounded-full transition-all duration-500 progress-striped" style="width: 0%"></div>
-                                    </div>
-                                </div>
-
-                                <!-- ETH Progress -->
-                                <div>
-                                    <div class="flex justify-between text-xs font-semibold mb-1">
-                                        <span class="text-gray-600">Ethereum (ETH)</span>
-                                        <span class="text-brand-navy font-mono" id="pnl-eth">+$0.00</span>
-                                    </div>
-                                    <div class="w-full bg-gray-100 rounded-full h-4 overflow-hidden relative">
-                                        <div id="bar-eth" class="bg-brand-navy h-full rounded-full transition-all duration-500 progress-striped" style="width: 0%"></div>
-                                    </div>
-                                </div>
-
-                                <!-- SOL Progress -->
-                                <div>
-                                    <div class="flex justify-between text-xs font-semibold mb-1">
-                                        <span class="text-gray-600">Solana (SOL)</span>
-                                        <span class="text-brand-navy font-mono" id="pnl-sol">+$0.00</span>
-                                    </div>
-                                    <div class="w-full bg-gray-100 rounded-full h-4 overflow-hidden relative">
-                                        <div id="bar-sol" class="bg-brand-teal h-full rounded-full transition-all duration-500 progress-striped" style="width: 0%"></div>
-                                    </div>
-                                </div>
-
-                                <!-- XRP Progress -->
-                                <div>
-                                    <div class="flex justify-between text-xs font-semibold mb-1">
-                                        <span class="text-gray-600">Ripple (XRP)</span>
-                                        <span class="text-brand-navy font-mono" id="pnl-xrp">+$0.00</span>
-                                    </div>
-                                    <div class="w-full bg-gray-100 rounded-full h-4 overflow-hidden relative">
-                                        <div id="bar-xrp" class="bg-brand-blue h-full rounded-full transition-all duration-500 progress-striped" style="width: 0%"></div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Spline Line/Curve Chart (3.5/5 cols) -->
-                        <div class="md:col-span-3.5 flex flex-col justify-end">
-                            <div class="w-full h-64" id="main-area-chart"></div>
-                            <!-- Small legend under chart -->
-                            <div class="flex justify-around text-[10px] text-gray-500 font-semibold border-t border-gray-50 pt-3">
-                                <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 bg-brand-orange rounded-full"></span> Bitcoin</span>
-                                <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 bg-brand-navy rounded-full"></span> Ethereum</span>
-                                <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 bg-brand-teal rounded-full"></span> Solana</span>
-                                <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 bg-brand-blue rounded-full"></span> XRP</span>
-                            </div>
-                        </div>
-                    </div>
+                    <!-- Full-width chart -->
+                    <div class="w-full" style="height: 320px;" id="main-area-chart"></div>
                 </div>
 
                 <!-- Bottom sections split -->
@@ -766,10 +705,10 @@
                 winRateGaugeInstance.render();
             }
 
-            // 2. Main Progression Chart (enforcing line and curve chart with dynamic period grouping)
+            // 2. Main P&L Progression Chart — per-crypto cumulative line chart
             const now = new Date();
             let startLimit = new Date();
-            let interval = 'day'; // 'hour', 'day', 'month'
+            let interval = 'day';
             
             if (timeFilter === 'daily') {
                 startLimit = new Date(now.getTime() - 24 * 60 * 60 * 1000);
@@ -784,109 +723,136 @@
                 startLimit = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
                 interval = 'month';
             } else if (timeFilter === 'custom') {
-                const customStartVal = document.getElementById('custom-start-date').value;
-                const customEndVal = document.getElementById('custom-end-date').value;
-                if (customStartVal) {
-                    startLimit = new Date(customStartVal + 'T00:00:00');
-                } else {
-                    startLimit = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-                }
-                const endLimit = customEndVal ? new Date(customEndVal + 'T23:59:59') : new Date();
-                const diffTime = Math.abs(endLimit - startLimit);
-                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                const csvStart = document.getElementById('custom-start-date').value;
+                const csvEnd = document.getElementById('custom-end-date').value;
+                if (csvStart) startLimit = new Date(csvStart + 'T00:00:00');
+                else startLimit = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+                const cEnd = csvEnd ? new Date(csvEnd + 'T23:59:59') : new Date();
+                const diffDays = Math.ceil(Math.abs(cEnd - startLimit) / (1000 * 60 * 60 * 24));
                 if (diffDays <= 2) interval = 'hour';
                 else if (diffDays <= 60) interval = 'day';
                 else interval = 'month';
             }
 
-            const endLimit = (timeFilter === 'custom' && document.getElementById('custom-end-date').value) 
-                ? new Date(document.getElementById('custom-end-date').value + 'T23:59:59') 
+            const chartEndLimit = (timeFilter === 'custom' && document.getElementById('custom-end-date').value)
+                ? new Date(document.getElementById('custom-end-date').value + 'T23:59:59')
                 : new Date();
-            
-            // Chronologically sort closed trades
+
+            // Helper: detect asset from trade question
+            function detectAsset(question) {
+                const q = question.toLowerCase();
+                if (q.includes('bitcoin') || q.includes('btc')) return 'btc';
+                if (q.includes('ethereum') || q.includes('eth')) return 'eth';
+                if (q.includes('solana') || q.includes('sol')) return 'sol';
+                if (q.includes('xrp') || q.includes('ripple')) return 'xrp';
+                return 'other';
+            }
+
             const chronoClosed = [...allTrades]
                 .filter(t => t.status === 'closed')
                 .sort((a, b) => new Date(a.entry_time).getTime() - new Date(b.entry_time).getTime());
 
-            // Calculate previous PnL before startLimit
-            const initialPnL = chronoClosed
-                .filter(t => new Date(t.entry_time) < startLimit)
-                .reduce((acc, curr) => acc + (curr.pnl || 0), 0);
+            const assets = ['btc', 'eth', 'sol', 'xrp'];
+            const assetColors = { btc: '#F04438', eth: '#0B192C', sol: '#12B76A', xrp: '#2E90FA' };
+            const assetNames = { btc: 'Bitcoin', eth: 'Ethereum', sol: 'Solana', xrp: 'XRP' };
 
-            // Filter trades in range
-            const tradesInRange = chronoClosed.filter(t => {
-                const et = new Date(t.entry_time);
-                return et >= startLimit && et <= endLimit;
+            // Pre-compute initial cumulative P&L per asset (trades before the window)
+            const initialPnLByAsset = {};
+            assets.forEach(a => {
+                initialPnLByAsset[a] = chronoClosed
+                    .filter(t => new Date(t.entry_time) < startLimit && detectAsset(t.question) === a)
+                    .reduce((acc, t) => acc + (t.pnl || 0), 0);
             });
 
-            const pnlProgression = [];
+            // Trades in the visible window
+            const tradesInRange = chronoClosed.filter(t => {
+                const et = new Date(t.entry_time);
+                return et >= startLimit && et <= chartEndLimit;
+            });
+
+            // Build time slots
             const labels = [];
-            
-            // Populate interval slots
-            const current = new Date(startLimit);
-            let runningSum = initialPnL;
-            let iterations = 0;
-            const maxIterations = 500;
-            
-            while (current <= endLimit && iterations < maxIterations) {
-                iterations++;
-                let slotStart = new Date(current);
+            const slotBounds = [];
+            const cursor = new Date(startLimit);
+            let iters = 0;
+            while (cursor <= chartEndLimit && iters < 500) {
+                iters++;
+                const slotStart = new Date(cursor);
                 let label = '';
-                
                 if (interval === 'hour') {
-                    label = current.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                    current.setHours(current.getHours() + 1);
+                    label = cursor.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    cursor.setHours(cursor.getHours() + 1);
                 } else if (interval === 'day') {
-                    label = current.toLocaleDateString([], { month: 'short', day: 'numeric' });
-                    current.setDate(current.getDate() + 1);
-                } else if (interval === 'month') {
-                    label = current.toLocaleDateString([], { year: 'numeric', month: 'short' });
-                    current.setMonth(current.getMonth() + 1);
+                    label = cursor.toLocaleDateString([], { month: 'short', day: 'numeric' });
+                    cursor.setDate(cursor.getDate() + 1);
+                } else {
+                    label = cursor.toLocaleDateString([], { year: 'numeric', month: 'short' });
+                    cursor.setMonth(cursor.getMonth() + 1);
                 }
-                
-                let slotEnd = new Date(current);
-                
-                // Sum PnLs for trades in this specific slot
-                const slotTrades = tradesInRange.filter(t => {
-                    const et = new Date(t.entry_time);
-                    return et >= slotStart && et < slotEnd;
-                });
-                
-                const slotPnL = slotTrades.reduce((acc, curr) => acc + (curr.pnl || 0), 0);
-                runningSum += slotPnL;
-                
-                pnlProgression.push(parseFloat(runningSum.toFixed(2)));
                 labels.push(label);
+                slotBounds.push({ start: slotStart, end: new Date(cursor) });
             }
 
-            const mainAreaOptions = {
+            // Build cumulative series per asset
+            const series = assets.map(asset => {
+                let running = initialPnLByAsset[asset];
+                const data = slotBounds.map(slot => {
+                    const slotPnL = tradesInRange
+                        .filter(t => detectAsset(t.question) === asset && new Date(t.entry_time) >= slot.start && new Date(t.entry_time) < slot.end)
+                        .reduce((acc, t) => acc + (t.pnl || 0), 0);
+                    running += slotPnL;
+                    return parseFloat(running.toFixed(2));
+                });
+                return { name: assetNames[asset], data };
+            });
+
+            // Determine sensible tick density for x-axis
+            const totalLabels = labels.length;
+            let tickAmount = totalLabels <= 12 ? totalLabels : (totalLabels <= 31 ? 10 : 12);
+
+            const mainChartOptions = {
                 chart: {
                     type: 'line',
-                    height: 220,
+                    height: '100%',
                     toolbar: { show: false },
                     background: 'transparent',
-                    fontFamily: 'Plus Jakarta Sans'
+                    fontFamily: 'Plus Jakarta Sans',
+                    zoom: { enabled: false }
                 },
-                series: [{
-                    name: 'Net P&L',
-                    data: pnlProgression
-                }],
-                colors: ['#F04438'],
+                series: series,
+                colors: assets.map(a => assetColors[a]),
                 stroke: {
                     curve: 'smooth',
-                    width: 3
+                    width: 2.5
+                },
+                markers: {
+                    size: 0,
+                    hover: { sizeOffset: 4 }
+                },
+                legend: {
+                    show: true,
+                    position: 'bottom',
+                    horizontalAlign: 'center',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    markers: { width: 8, height: 8, radius: 12 },
+                    itemMargin: { horizontal: 16 }
                 },
                 grid: {
                     borderColor: '#F2F4F7',
                     strokeDashArray: 4,
-                    padding: { left: 10, right: 10 }
+                    padding: { left: 10, right: 10, top: 10, bottom: 0 }
                 },
                 xaxis: {
                     categories: labels,
                     axisBorder: { show: false },
                     axisTicks: { show: false },
+                    tickAmount: tickAmount,
                     labels: {
                         show: true,
+                        rotate: -45,
+                        rotateAlways: totalLabels > 14,
+                        hideOverlappingLabels: true,
                         style: {
                             colors: '#98A2B3',
                             fontSize: '9px',
@@ -901,12 +867,14 @@
                         },
                         style: {
                             colors: '#98A2B3',
-                            fontSize: '9px',
+                            fontSize: '10px',
                             fontWeight: '600'
                         }
                     }
                 },
                 tooltip: {
+                    shared: true,
+                    intersect: false,
                     y: {
                         formatter: function (value) {
                             return (value >= 0 ? '+' : '') + '$' + value.toFixed(2);
@@ -916,9 +884,9 @@
             };
 
             if (mainAreaChartInstance) {
-                mainAreaChartInstance.updateOptions(mainAreaOptions);
+                mainAreaChartInstance.updateOptions(mainChartOptions);
             } else {
-                mainAreaChartInstance = new ApexCharts(document.querySelector("#main-area-chart"), mainAreaOptions);
+                mainAreaChartInstance = new ApexCharts(document.querySelector("#main-area-chart"), mainChartOptions);
                 mainAreaChartInstance.render();
             }
 
