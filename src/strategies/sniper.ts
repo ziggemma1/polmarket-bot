@@ -217,7 +217,7 @@ async function fetchStrikePrice(market: any, ticker: 'btc' | 'eth' | 'sol' | 'bn
                 if (Array.isArray(klines) && klines.length > 0) {
                     const candle = klines.find((k: any) => k[0] === startTimestamp);
                     if (candle) {
-                        strikePrice = parseFloat(candle[3]); // Index 3 is open price
+                        strikePrice = parseFloat(candle[3]); 
                     }
                 }
             }
@@ -240,27 +240,6 @@ const BOOST_GAP_THRESHOLDS: { [key in 'btc' | 'eth' | 'sol' | 'bnb']: number } =
     sol: 0.19,
     bnb: 0.60
 };
-
-async function evaluateSizingAtT12(market: any, ticker: 'btc' | 'eth' | 'sol' | 'bnb'): Promise<number> {
-    try {
-        const spotPrice = await fetchSpotPrice(ticker);
-        const strikePrice = await fetchStrikePrice(market, ticker);
-        if (!spotPrice || !strikePrice) return 10;
-
-        const priceGap = Math.abs(spotPrice - strikePrice);
-        const boostGap = BOOST_GAP_THRESHOLDS[ticker];
-
-        if (priceGap >= boostGap) {
-            console.log(`[Sniper] 🚀 T-12s ${ticker.toUpperCase()} Gap $${priceGap.toFixed(4)} (>= $${boostGap}) -> Position size set to BOOSTED 20 SHARES`);
-            return 20;
-        } else {
-            console.log(`[Sniper] ⏱️ T-12s ${ticker.toUpperCase()} Gap $${priceGap.toFixed(4)} -> Position size set to STANDARD 10 SHARES`);
-            return 10;
-        }
-    } catch (e) {
-        return 10;
-    }
-}
 
 async function tick() {
     try {
@@ -287,7 +266,6 @@ async function tick() {
 
         if (executedMarketIds.size > 20) {
             executedMarketIds.clear();
-            marketSharesCache.clear();
         }
 
         const tickers: ('btc' | 'eth' | 'sol' | 'bnb')[] = ['btc', 'eth', 'sol', 'bnb'];
@@ -300,19 +278,12 @@ async function tick() {
             const endDate = new Date(market.endDate);
             const secondsLeft = Math.round((endDate.getTime() - Date.now()) / 1000);
 
-            // Phase 1: At T-12s to T-11s, evaluate position sizing rules (10 shares vs 1 share)
-            if (secondsLeft <= 12 && secondsLeft > 10 && !marketSharesCache.has(market.id)) {
-                const sizingShares = await evaluateSizingAtT12(market, ticker);
-                marketSharesCache.set(market.id, sizingShares);
-            }
-
-            // Phase 2: At T-10s (secondsLeft <= 10 && secondsLeft > 0), execute trade at EXACT T-10s
+            // Execute trade at EXACT T-10s window (secondsLeft <= 10 && secondsLeft > 0)
             if (secondsLeft <= 10 && secondsLeft > 0) {
                 executedMarketIds.add(market.id);
-                const targetShares = marketSharesCache.get(market.id) || 10;
-                console.log(`[Sniper] 🎯 Executing ${ticker.toUpperCase()} snipe at T-${secondsLeft}s with ${targetShares} shares`);
+                console.log(`[Sniper] 🎯 Executing ${ticker.toUpperCase()} snipe at EXACT T-${secondsLeft}s`);
                 
-                const result = await executeSnipe(market, ticker, targetShares);
+                const result = await executeSnipe(market, ticker);
                 
                 if (result.success) {
                     tradesToday++;
@@ -380,9 +351,11 @@ async function executeSnipe(market: any, ticker: 'btc' | 'eth' | 'sol' | 'bnb', 
         const side = priceValue > strikePrice ? 'YES' : 'NO';
         console.log(`[Sniper] Side Choice: ${side} (${ticker.toUpperCase()} T-10s spot $${priceValue} vs strike $${strikePrice})`);
 
-        // 4. Use predetermined shares from T-12s sizing evaluation
+        // 4. Calculate position sizing AT EXACT T-10s
         const entryPrice = 0.97;
-        const shares = sharesOverride || 1;
+        const boostGap = BOOST_GAP_THRESHOLDS[ticker];
+        const shares = sharesOverride || (priceGap >= boostGap ? 20 : 10);
+        console.log(`[Sniper] Dynamic T-10s Position Size: ${shares} shares (Price Gap $${priceGap.toFixed(4)} vs Boost threshold $${boostGap})`);
 
         // 5. Execute the trade
         if (config?.paperMode) {
