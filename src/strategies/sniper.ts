@@ -236,9 +236,15 @@ async function evaluateSizingAtT12(market: any, ticker: 'btc' | 'eth' | 'sol' | 
         const priceGap = Math.abs(spotPrice - strikePrice);
         let shares = 1;
 
-        if (ticker === 'btc' && priceGap >= 70) {
-            shares = 10;
-            console.log(`[Sniper] ⏱️ T-12s BTC Gap $${priceGap.toFixed(2)} (>= $70) -> Position size set to 10 shares`);
+        if (ticker === 'btc') {
+            if (priceGap <= 10) {
+                console.log(`[Sniper] 🛑 T-12s BTC Gap $${priceGap.toFixed(2)} (<= $10.00 noise band) -> Minimum Gap Guard Active (Will Skip at T-10s)`);
+            } else if (priceGap >= 70) {
+                shares = 10;
+                console.log(`[Sniper] ⏱️ T-12s BTC Gap $${priceGap.toFixed(2)} (>= $70) -> Position size set to 10 shares`);
+            } else {
+                console.log(`[Sniper] ⏱️ T-12s BTC Gap $${priceGap.toFixed(2)} (Standard 1 share)`);
+            }
         } else if (ticker === 'eth' && priceGap >= 5) {
             shares = 10;
             console.log(`[Sniper] ⏱️ T-12s ETH Gap $${priceGap.toFixed(2)} (>= $5) -> Position size set to 10 shares`);
@@ -362,6 +368,13 @@ async function executeSnipe(market: any, ticker: 'btc' | 'eth' | 'sol' | 'bnb', 
             return { success: false, error: `Exact 5m candle strike price (timestamp ${startTimestamp}) not found for ${ticker.toUpperCase()}` };
         }
         console.log(`[Sniper] Verified Strike Price: $${strikePrice}`);
+
+        // MINIMUM GAP GUARD FOR BTC: If price gap <= $10.00, abort trade execution immediately
+        const priceGap = Math.abs(priceValue - strikePrice);
+        if (ticker === 'btc' && priceGap <= 10) {
+            console.log(`[Sniper] 🛑 BTC Minimum Gap Guard Triggered: Price gap is $${priceGap.toFixed(2)} (<= $10.00 noise band). Skipping trade.`);
+            return { success: false, error: `BTC Price gap $${priceGap.toFixed(2)} is within $10.00 noise band. Execution skipped.` };
+        }
 
         // 3. Determine winning side at T-10s
         const side = priceValue > strikePrice ? 'YES' : 'NO';
