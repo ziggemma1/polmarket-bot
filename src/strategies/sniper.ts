@@ -52,8 +52,8 @@ async function settleExpiredPositions() {
         console.log(`[Sniper] Found ${expired.length} expired paper positions. Resolving outcomes...`);
 
         // Cache prices to avoid multiple fetches for the same ticker
-        const priceCache: { [key: string]: number | null } = { btc: null, eth: null, sol: null, xrp: null };
-        const getPrice = async (t: 'btc' | 'eth' | 'sol' | 'xrp') => {
+        const priceCache: { [key: string]: number | null } = { btc: null, eth: null, sol: null };
+        const getPrice = async (t: 'btc' | 'eth' | 'sol') => {
             if (priceCache[t] !== null) return priceCache[t];
             try {
                 const response = await fetch(`https://api.coinbase.com/v2/prices/${t.toUpperCase()}-USD/spot`);
@@ -72,14 +72,12 @@ async function settleExpiredPositions() {
             console.log(`[Sniper] 🔄 Settling expired position ${position.id} instantly...`);
 
             // Parse ticker from question text
-            let ticker: 'btc' | 'eth' | 'sol' | 'xrp' = 'btc';
+            let ticker: 'btc' | 'eth' | 'sol' = 'btc';
             const q = (position.question || '').toLowerCase();
             if (q.includes('ethereum')) {
                 ticker = 'eth';
             } else if (q.includes('solana')) {
                 ticker = 'sol';
-            } else if (q.includes('xrp')) {
-                ticker = 'xrp';
             }
 
             const price = await getPrice(ticker);
@@ -159,8 +157,8 @@ async function tick() {
             executedMarketIds.clear();
         }
 
-        // Scan BTC, ETH, SOL, and XRP markets in parallel
-        const tickers: ('btc' | 'eth' | 'sol' | 'xrp')[] = ['btc', 'eth', 'sol', 'xrp'];
+        // Scan BTC, ETH, and SOL markets in parallel
+        const tickers: ('btc' | 'eth' | 'sol')[] = ['btc', 'eth', 'sol'];
         for (const ticker of tickers) {
             const market = await getCurrentMarket(ticker);
             if (!market) continue;
@@ -209,7 +207,7 @@ async function tick() {
     setTimeout(tick, CHECK_INTERVAL);
 }
 
-async function executeSnipe(market: any, ticker: 'btc' | 'eth' | 'sol' | 'xrp'): Promise<{ 
+async function executeSnipe(market: any, ticker: 'btc' | 'eth' | 'sol'): Promise<{ 
     success: boolean; 
     side?: string; 
     price?: number; 

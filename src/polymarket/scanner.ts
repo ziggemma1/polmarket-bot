@@ -3,7 +3,7 @@ import logger from '../logger';
 
 const GAMMA_API = 'https://gamma-api.polymarket.com';
 
-function getCurrent5mSlug(ticker: 'btc' | 'eth' | 'sol' | 'xrp'): string {
+function getCurrent5mSlug(ticker: 'btc' | 'eth' | 'sol'): string {
     const now = new Date();
     
     // Get UTC components
@@ -25,7 +25,7 @@ function getCurrent5mSlug(ticker: 'btc' | 'eth' | 'sol' | 'xrp'): string {
     return `${ticker}-updown-5m-${unixTimestamp}`;
 }
 
-export async function getCurrentMarket(ticker: 'btc' | 'eth' | 'sol' | 'xrp') {
+export async function getCurrentMarket(ticker: 'btc' | 'eth' | 'sol') {
     const slug = getCurrent5mSlug(ticker);
     logger.info(`[Scanner] Target ${ticker.toUpperCase()} slug: ${slug}`);
 
@@ -82,9 +82,7 @@ export async function getCurrentSOLMarket() {
     return getCurrentMarket('sol');
 }
 
-export async function getCurrentXRPMarket() {
-    return getCurrentMarket('xrp');
-}
+
 
 export async function getUpcomingBTCMarkets() {
     const market = await getCurrentBTCMarket();
