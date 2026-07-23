@@ -632,10 +632,10 @@
             if (gridContainer) {
                 gridContainer.innerHTML = '';
                 const assets = [
-                    { id: 'btc', name: 'Bitcoin', symbol: 'BTC', noiseGuard: '$10.00', threshold: '$70.00', bg: 'bg-amber-50', border: 'border-amber-100', text: 'text-amber-600' },
-                    { id: 'eth', name: 'Ethereum', symbol: 'ETH', noiseGuard: '$0.90', threshold: '$5.00', bg: 'bg-indigo-50', border: 'border-indigo-100', text: 'text-indigo-600' },
-                    { id: 'sol', name: 'Solana', symbol: 'SOL', noiseGuard: '$0.05', threshold: '$0.19', bg: 'bg-emerald-50', border: 'border-emerald-100', text: 'text-emerald-600' },
-                    { id: 'bnb', name: 'Binance Coin', symbol: 'BNB', noiseGuard: '$0.20', threshold: '$0.60', bg: 'bg-yellow-50', border: 'border-yellow-100', text: 'text-yellow-600' }
+                    { id: 'btc', name: 'Bitcoin', symbol: 'BTC', noiseGuard: '$20.00', threshold: '$70.00', bg: 'bg-amber-50', border: 'border-amber-100', text: 'text-amber-600' },
+                    { id: 'eth', name: 'Ethereum', symbol: 'ETH', noiseGuard: '$1.20', threshold: '$5.00', bg: 'bg-indigo-50', border: 'border-indigo-100', text: 'text-indigo-600' },
+                    { id: 'sol', name: 'Solana', symbol: 'SOL', noiseGuard: '$0.10', threshold: '$0.19', bg: 'bg-emerald-50', border: 'border-emerald-100', text: 'text-emerald-600' },
+                    { id: 'bnb', name: 'Binance Coin', symbol: 'BNB', noiseGuard: '$0.30', threshold: '$0.60', bg: 'bg-yellow-50', border: 'border-yellow-100', text: 'text-yellow-600' }
                 ];
 
                 assets.forEach(asset => {
@@ -685,15 +685,15 @@
 
                         <!-- 2 Share Size Tier Breakdown Grid -->
                         <div class="grid grid-cols-2 gap-2 pt-3 border-t border-gray-50">
-                            <!-- Standard 1 Share Tier -->
+                            <!-- Standard 10 Shares Tier -->
                             <div class="bg-gray-50/80 border border-gray-100 rounded-xl p-2.5 text-center">
-                                <span class="block text-[9px] font-bold text-gray-400 uppercase tracking-wider">Standard (1 Share)</span>
+                                <span class="block text-[9px] font-bold text-gray-400 uppercase tracking-wider">Standard (10 Shares)</span>
                                 <span class="block text-xs font-bold ${data.tier1.pnl >= 0 ? 'text-emerald-600' : 'text-rose-500'} mt-0.5 font-mono">${tier1PnlStr}</span>
                                 <span class="block text-[9px] text-gray-500 mt-0.5">${data.tier1.trades} Trades (${data.tier1.wins}W / ${data.tier1.losses}L)</span>
                             </div>
-                            <!-- Boosted 10 Shares Tier -->
+                            <!-- Boosted 20 Shares Tier -->
                             <div class="bg-emerald-50/60 border border-emerald-100 rounded-xl p-2.5 text-center">
-                                <span class="block text-[9px] font-bold text-emerald-800 uppercase tracking-wider">Boosted (10 Shares)</span>
+                                <span class="block text-[9px] font-bold text-emerald-800 uppercase tracking-wider">Boosted (20 Shares)</span>
                                 <span class="block text-xs font-bold ${data.tier10.pnl >= 0 ? 'text-emerald-600' : 'text-rose-500'} mt-0.5 font-mono">${tier10PnlStr}</span>
                                 <span class="block text-[9px] text-emerald-700 mt-0.5">${data.tier10.trades} Trades (${data.tier10.wins}W / ${data.tier10.losses}L)</span>
                             </div>
@@ -1280,7 +1280,7 @@
                 },
                 grid: { borderColor: '#F2F4F7', strokeDashArray: 4 },
                 xaxis: {
-                    categories: ['Standard (1 Share)', 'Boosted (10 Shares)'],
+                    categories: ['Standard (10 Shares)', 'Boosted (20 Shares)'],
                     axisBorder: { show: false },
                     axisTicks: { show: false }
                 },

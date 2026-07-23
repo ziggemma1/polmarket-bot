@@ -228,10 +228,10 @@ async function fetchStrikePrice(market: any, ticker: 'btc' | 'eth' | 'sol' | 'bn
 }
 
 const MIN_GAP_THRESHOLDS: { [key in 'btc' | 'eth' | 'sol' | 'bnb']: number } = {
-    btc: 10.00,
-    eth: 0.90,
-    sol: 0.05,
-    bnb: 0.20
+    btc: 20.00,
+    eth: 1.20,
+    sol: 0.10,
+    bnb: 0.30
 };
 
 const BOOST_GAP_THRESHOLDS: { [key in 'btc' | 'eth' | 'sol' | 'bnb']: number } = {
@@ -245,7 +245,7 @@ async function evaluateSizingAtT12(market: any, ticker: 'btc' | 'eth' | 'sol' | 
     try {
         const spotPrice = await fetchSpotPrice(ticker);
         const strikePrice = await fetchStrikePrice(market, ticker);
-        if (!spotPrice || !strikePrice) return 1;
+        if (!spotPrice || !strikePrice) return 10;
 
         const priceGap = Math.abs(spotPrice - strikePrice);
         const minGap = MIN_GAP_THRESHOLDS[ticker];
@@ -253,16 +253,16 @@ async function evaluateSizingAtT12(market: any, ticker: 'btc' | 'eth' | 'sol' | 
 
         if (priceGap <= minGap) {
             console.log(`[Sniper] 🛑 T-12s ${ticker.toUpperCase()} Gap $${priceGap.toFixed(4)} (<= $${minGap} noise band) -> Minimum Gap Guard Active (Will Skip at T-10s)`);
-            return 1;
-        } else if (priceGap >= boostGap) {
-            console.log(`[Sniper] ⏱️ T-12s ${ticker.toUpperCase()} Gap $${priceGap.toFixed(4)} (>= $${boostGap}) -> Position size set to 10 shares`);
             return 10;
+        } else if (priceGap >= boostGap) {
+            console.log(`[Sniper] 🚀 T-12s ${ticker.toUpperCase()} Gap $${priceGap.toFixed(4)} (>= $${boostGap}) -> Position size set to BOOSTED 20 SHARES`);
+            return 20;
         } else {
-            console.log(`[Sniper] ⏱️ T-12s ${ticker.toUpperCase()} Gap $${priceGap.toFixed(4)} -> Standard 1 share`);
-            return 1;
+            console.log(`[Sniper] ⏱️ T-12s ${ticker.toUpperCase()} Gap $${priceGap.toFixed(4)} -> Position size set to STANDARD 10 SHARES`);
+            return 10;
         }
     } catch (e) {
-        return 1;
+        return 10;
     }
 }
 
@@ -313,7 +313,7 @@ async function tick() {
             // Phase 2: At T-10s (secondsLeft <= 10 && secondsLeft > 0), execute trade at EXACT T-10s
             if (secondsLeft <= 10 && secondsLeft > 0) {
                 executedMarketIds.add(market.id);
-                const targetShares = marketSharesCache.get(market.id) || 1;
+                const targetShares = marketSharesCache.get(market.id) || 10;
                 console.log(`[Sniper] 🎯 Executing ${ticker.toUpperCase()} snipe at T-${secondsLeft}s with ${targetShares} shares`);
                 
                 const result = await executeSnipe(market, ticker, targetShares);
