@@ -168,6 +168,107 @@ async function settleExpiredPositions() {
     }
 }
 
+// Cache for T-12s position sizing evaluation per market ID
+const marketSharesCache = new Map<string, number>();
+
+async function fetchSpotPrice(ticker: 'btc' | 'eth' | 'sol' | 'bnb'): Promise<number> {
+    const cgMap: { [key: string]: string } = { btc: 'bitcoin', eth: 'ethereum', sol: 'solana', bnb: 'binancecoin' };
+    let priceValue = 0;
+
+    try {
+        const coinbaseResponse = await fetch(`https://api.coinbase.com/v2/prices/${ticker.toUpperCase()}-USD/spot`);
+        const coinbaseData = await coinbaseResponse.json();
+        priceValue = parseFloat(coinbaseData?.data?.amount);
+    } catch (e) {}
+
+    if (!priceValue || isNaN(priceValue)) {
+        try {
+            const cgId = cgMap[ticker] || ticker;
+            const cgRes = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${cgId}&vs_currencies=usd`);
+            const cgData = await cgRes.json();
+            priceValue = parseFloat(cgData?.[cgId]?.usd);
+        } catch (e) {}
+    }
+
+    if (!priceValue || isNaN(priceValue)) {
+        try {
+            const binanceResponse = await fetch(`https://data-api.binance.vision/api/v3/ticker/price?symbol=${ticker.toUpperCase()}USDT`);
+            const binanceData = await binanceResponse.json();
+            priceValue = parseFloat(binanceData?.price);
+        } catch (e) {}
+    }
+
+    return priceValue;
+}
+
+async function fetchStrikePrice(market: any, ticker: 'btc' | 'eth' | 'sol' | 'bnb'): Promise<number> {
+    let strikePrice = 0;
+    const startTimestamp = parseInt(market.slug.split('-').pop() || '0');
+
+    try {
+        if (startTimestamp > 0) {
+            const bvResponse = await fetch(`https://data-api.binance.vision/api/v3/klines?symbol=${ticker.toUpperCase()}USDT&interval=5m&limit=20`);
+            const bvKlines = await bvResponse.json();
+            if (Array.isArray(bvKlines)) {
+                // STRICT MATCH: exact candle open timestamp must match market startTimestamp
+                const candle = bvKlines.find((k: any) => Math.floor(k[0] / 1000) === startTimestamp);
+                if (candle) {
+                    strikePrice = parseFloat(candle[1]); // Index 1 is open price
+                }
+            }
+        }
+    } catch (e: any) {}
+
+    if (!strikePrice || isNaN(strikePrice)) {
+        try {
+            if (startTimestamp > 0) {
+                const cbResponse = await fetch(`https://api.exchange.coinbase.com/products/${ticker.toUpperCase()}-USD/candles?granularity=300`, {
+                    headers: { 'User-Agent': 'polmarket-bot' }
+                });
+                const klines = await cbResponse.json();
+                if (Array.isArray(klines) && klines.length > 0) {
+                    const candle = klines.find((k: any) => k[0] === startTimestamp);
+                    if (candle) {
+                        strikePrice = parseFloat(candle[3]); // Index 3 is open price
+                    }
+                }
+            }
+        } catch (e: any) {}
+    }
+
+    return strikePrice;
+}
+
+async function evaluateSizingAtT12(market: any, ticker: 'btc' | 'eth' | 'sol' | 'bnb'): Promise<number> {
+    try {
+        const spotPrice = await fetchSpotPrice(ticker);
+        const strikePrice = await fetchStrikePrice(market, ticker);
+        if (!spotPrice || !strikePrice) return 1;
+
+        const priceGap = Math.abs(spotPrice - strikePrice);
+        let shares = 1;
+
+        if (ticker === 'btc' && priceGap >= 70) {
+            shares = 10;
+            console.log(`[Sniper] ⏱️ T-12s BTC Gap $${priceGap.toFixed(2)} (>= $70) -> Position size set to 10 shares`);
+        } else if (ticker === 'eth' && priceGap >= 5) {
+            shares = 10;
+            console.log(`[Sniper] ⏱️ T-12s ETH Gap $${priceGap.toFixed(2)} (>= $5) -> Position size set to 10 shares`);
+        } else if (ticker === 'sol' && priceGap >= 0.19) {
+            shares = 10;
+            console.log(`[Sniper] ⏱️ T-12s SOL Gap $${priceGap.toFixed(2)} (>= $0.19) -> Position size set to 10 shares`);
+        } else if (ticker === 'bnb' && priceGap >= 0.60) {
+            shares = 10;
+            console.log(`[Sniper] ⏱️ T-12s BNB Gap $${priceGap.toFixed(2)} (>= $0.60) -> Position size set to 10 shares`);
+        } else {
+            console.log(`[Sniper] ⏱️ T-12s ${ticker.toUpperCase()} Gap $${priceGap.toFixed(2)} -> Standard 1 share`);
+        }
+        return shares;
+    } catch (e) {
+        return 1;
+    }
+}
+
 async function tick() {
     try {
         await settleExpiredPositions();
@@ -179,13 +280,7 @@ async function tick() {
         return;
     }
 
-    if (!sniperActive) { // Need to re-check after async
-        setTimeout(tick, CHECK_INTERVAL);
-        return;
-    }
-
     try {
-        // Check daily limit
         const limit = config?.maxDailyTrades || 500000;
         if (tradesToday >= limit) {
             console.log(`[Sniper] Daily limit reached. Pausing.`);
@@ -197,12 +292,11 @@ async function tick() {
             return;
         }
 
-        // Clean up executed IDs map
         if (executedMarketIds.size > 20) {
             executedMarketIds.clear();
+            marketSharesCache.clear();
         }
 
-        // Scan BTC, ETH, SOL, and BNB markets in parallel
         const tickers: ('btc' | 'eth' | 'sol' | 'bnb')[] = ['btc', 'eth', 'sol', 'bnb'];
         for (const ticker of tickers) {
             const market = await getCurrentMarket(ticker);
@@ -210,23 +304,27 @@ async function tick() {
 
             if (executedMarketIds.has(market.id)) continue;
 
-            // Check expiration
             const endDate = new Date(market.endDate);
             const secondsLeft = Math.round((endDate.getTime() - Date.now()) / 1000);
 
-            // Execute snipe in final window
-            if (secondsLeft <= SNIPE_WINDOW && secondsLeft > 0) {
-                // Mark immediately so the bot NEVER retries this market in the remaining seconds of this cycle
+            // Phase 1: At T-12s to T-11s, evaluate position sizing rules (10 shares vs 1 share)
+            if (secondsLeft <= 12 && secondsLeft > 10 && !marketSharesCache.has(market.id)) {
+                const sizingShares = await evaluateSizingAtT12(market, ticker);
+                marketSharesCache.set(market.id, sizingShares);
+            }
+
+            // Phase 2: At T-10s (secondsLeft <= 10 && secondsLeft > 0), execute trade at EXACT T-10s
+            if (secondsLeft <= 10 && secondsLeft > 0) {
                 executedMarketIds.add(market.id);
-                console.log(`[Sniper] 🎯 Executing ${ticker.toUpperCase()} snipe at T-${secondsLeft}s`);
+                const targetShares = marketSharesCache.get(market.id) || 1;
+                console.log(`[Sniper] 🎯 Executing ${ticker.toUpperCase()} snipe at T-${secondsLeft}s with ${targetShares} shares`);
                 
-                const result = await executeSnipe(market, ticker);
+                const result = await executeSnipe(market, ticker, targetShares);
                 
                 if (result.success) {
                     tradesToday++;
-                    console.log(`[Sniper] ✅ ${ticker.toUpperCase()} Snipe executed. Trades today: ${tradesToday}`);
+                    console.log(`[Sniper] ✅ ${ticker.toUpperCase()} Snipe executed at T-${secondsLeft}s. Trades today: ${tradesToday}`);
                     
-                    // Send detailed Telegram alert
                     if (config?.telegramService) {
                         config.telegramService.sendAlert(
                             `📄 PAPER: Snipe Executed\n` +
@@ -253,7 +351,7 @@ async function tick() {
     setTimeout(tick, CHECK_INTERVAL);
 }
 
-async function executeSnipe(market: any, ticker: 'btc' | 'eth' | 'sol' | 'bnb'): Promise<{ 
+async function executeSnipe(market: any, ticker: 'btc' | 'eth' | 'sol' | 'bnb', sharesOverride?: number): Promise<{ 
     success: boolean; 
     side?: string; 
     price?: number; 
@@ -262,137 +360,28 @@ async function executeSnipe(market: any, ticker: 'btc' | 'eth' | 'sol' | 'bnb'):
     error?: string;
 }> {
     try {
-        const cgMap: { [key: string]: string } = {
-            btc: 'bitcoin',
-            eth: 'ethereum',
-            sol: 'solana',
-            bnb: 'binancecoin'
-        };
-
-        // 1. Fetch spot price (Coinbase -> CoinGecko -> Binance Vision)
-        let priceValue = 0;
-        try {
-            const coinbaseResponse = await fetch(`https://api.coinbase.com/v2/prices/${ticker.toUpperCase()}-USD/spot`);
-            const coinbaseData = await coinbaseResponse.json();
-            priceValue = parseFloat(coinbaseData?.data?.amount);
-        } catch (e) {}
-
-        if (!priceValue || isNaN(priceValue)) {
-            try {
-                const cgId = cgMap[ticker] || ticker;
-                const cgRes = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${cgId}&vs_currencies=usd`);
-                const cgData = await cgRes.json();
-                priceValue = parseFloat(cgData?.[cgId]?.usd);
-            } catch (e) {}
-        }
-
-        if (!priceValue || isNaN(priceValue)) {
-            try {
-                const binanceResponse = await fetch(`https://data-api.binance.vision/api/v3/ticker/price?symbol=${ticker.toUpperCase()}USDT`);
-                const binanceData = await binanceResponse.json();
-                priceValue = parseFloat(binanceData?.price);
-            } catch (e) {}
-        }
-
+        // 1. Fetch fresh spot price AT T-10s
+        const priceValue = await fetchSpotPrice(ticker);
         if (!priceValue || isNaN(priceValue)) {
             return { success: false, error: `Could not fetch spot price for ${ticker.toUpperCase()}` };
         }
-        console.log(`[Sniper] ${ticker.toUpperCase()} Spot Price: $${priceValue}`);
+        console.log(`[Sniper] ${ticker.toUpperCase()} T-10s Spot Price: $${priceValue}`);
 
-        // 2. Fetch the strike price (open price of the 5m candle) from Binance Vision API (STRICT MATCH ONLY)
-        let strikePrice = 0;
+        // 2. Fetch verified strike price
+        const strikePrice = await fetchStrikePrice(market, ticker);
         const startTimestamp = parseInt(market.slug.split('-').pop() || '0');
-        
-        try {
-            if (startTimestamp > 0) {
-                const bvResponse = await fetch(`https://data-api.binance.vision/api/v3/klines?symbol=${ticker.toUpperCase()}USDT&interval=5m&limit=20`);
-                const bvKlines = await bvResponse.json();
-                if (Array.isArray(bvKlines)) {
-                    // STRICT MATCH: exact candle open timestamp must match market startTimestamp
-                    const candle = bvKlines.find((k: any) => Math.floor(k[0] / 1000) === startTimestamp);
-                    if (candle) {
-                        strikePrice = parseFloat(candle[1]); // Index 1 is open price
-                        console.log(`[Sniper] ✅ Strict Binance Vision candle match for ${ticker.toUpperCase()} (timestamp ${startTimestamp}). Open price: $${strikePrice}`);
-                    }
-                }
-            }
-        } catch (e: any) {}
-
-        // Fallback to Coinbase Exchange candles for BTC/ETH/SOL ONLY if timestamp strictly matches
-        if (!strikePrice || isNaN(strikePrice)) {
-            try {
-                if (startTimestamp > 0) {
-                    const cbResponse = await fetch(`https://api.exchange.coinbase.com/products/${ticker.toUpperCase()}-USD/candles?granularity=300`, {
-                        headers: { 'User-Agent': 'polmarket-bot' }
-                    });
-                    const klines = await cbResponse.json();
-                    if (Array.isArray(klines) && klines.length > 0) {
-                        const candle = klines.find((k: any) => k[0] === startTimestamp);
-                        if (candle) {
-                            strikePrice = parseFloat(candle[3]); // Index 3 is open price
-                            console.log(`[Sniper] ✅ Strict Coinbase candle match for ${ticker.toUpperCase()} (timestamp ${startTimestamp}). Open price: $${strikePrice}`);
-                        }
-                    }
-                }
-            } catch (e: any) {}
-        }
-
-        // STRICT NO-FALLBACK GUARD: Abort execution if exact 5m candle strike price is missing
         if (!strikePrice || isNaN(strikePrice) || strikePrice <= 0) {
             return { success: false, error: `Exact 5m candle strike price (timestamp ${startTimestamp}) not found for ${ticker.toUpperCase()}` };
         }
         console.log(`[Sniper] Verified Strike Price: $${strikePrice}`);
 
-        // 3. Determine winning side
+        // 3. Determine winning side at T-10s
         const side = priceValue > strikePrice ? 'YES' : 'NO';
-        console.log(`[Sniper] ${side} is winning (${ticker.toUpperCase()} $${priceValue} vs strike $${strikePrice})`);
+        console.log(`[Sniper] Side Choice: ${side} (${ticker.toUpperCase()} T-10s spot $${priceValue} vs strike $${strikePrice})`);
 
-        // 4. Determine trade execution parameters
+        // 4. Use predetermined shares from T-12s sizing evaluation
         const entryPrice = 0.97;
-        const tradingLimit = config?.tradingLimit || 1.00;
-        let shares = Math.floor(tradingLimit / entryPrice) || 1;
-
-        // Custom Sizing Logic per Crypto:
-        // Bitcoin (BTC): If BTC spot price is $70+ above or below the strike price, boost position size to 10 shares
-        if (ticker === 'btc') {
-            const priceGap = Math.abs(priceValue - strikePrice);
-            if (priceGap >= 70) {
-                shares = 10;
-                console.log(`[Sniper] 🚀 BTC Custom Strategy Met: Price gap is $${priceGap.toFixed(2)} (>= $70). Boosting position size to 10 shares!`);
-            } else {
-                console.log(`[Sniper] ℹ️ BTC Price gap is $${priceGap.toFixed(2)} (< $70). Standard ${shares} share.`);
-            }
-        }
-        // Ethereum (ETH): If ETH spot price is $5+ above or below the strike price, boost position size to 10 shares
-        else if (ticker === 'eth') {
-            const priceGap = Math.abs(priceValue - strikePrice);
-            if (priceGap >= 5) {
-                shares = 10;
-                console.log(`[Sniper] 🚀 ETH Custom Strategy Met: Price gap is $${priceGap.toFixed(2)} (>= $5). Boosting position size to 10 shares!`);
-            } else {
-                console.log(`[Sniper] ℹ️ ETH Price gap is $${priceGap.toFixed(2)} (< $5). Standard ${shares} share.`);
-            }
-        }
-        // Solana (SOL): If SOL spot price is $0.19+ above or below the strike price, boost position size to 10 shares
-        else if (ticker === 'sol') {
-            const priceGap = Math.abs(priceValue - strikePrice);
-            if (priceGap >= 0.19) {
-                shares = 10;
-                console.log(`[Sniper] 🚀 SOL Custom Strategy Met: Price gap is $${priceGap.toFixed(2)} (>= $0.19). Boosting position size to 10 shares!`);
-            } else {
-                console.log(`[Sniper] ℹ️ SOL Price gap is $${priceGap.toFixed(2)} (< $0.19). Standard ${shares} share.`);
-            }
-        }
-        // Binance Coin (BNB): If BNB spot price is $0.60+ above or below the strike price, boost position size to 10 shares
-        else if (ticker === 'bnb') {
-            const priceGap = Math.abs(priceValue - strikePrice);
-            if (priceGap >= 0.60) {
-                shares = 10;
-                console.log(`[Sniper] 🚀 BNB Custom Strategy Met: Price gap is $${priceGap.toFixed(2)} (>= $0.60). Boosting position size to 10 shares!`);
-            } else {
-                console.log(`[Sniper] ℹ️ BNB Price gap is $${priceGap.toFixed(2)} (< $0.60). Standard ${shares} share.`);
-            }
-        }
+        const shares = sharesOverride || 1;
 
         // 5. Execute the trade
         if (config?.paperMode) {
