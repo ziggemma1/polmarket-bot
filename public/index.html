@@ -205,7 +205,7 @@
                         </div>
                         <div class="flex justify-between items-center text-xs">
                             <span class="font-medium text-gray-500">Daily Trade Limit</span>
-                            <span class="font-bold text-gray-900 font-mono" id="billing-daily-trades">0 / 500 cap</span>
+                            <span class="font-bold text-gray-900 font-mono" id="billing-daily-trades">0 / 500,000 cap</span>
                         </div>
                         <div class="flex justify-between items-center text-xs">
                             <span class="font-medium text-gray-500">Average Profit per Trade</span>
@@ -389,7 +389,7 @@
                 <div class="space-y-4">
                     <div class="grid grid-cols-3 gap-4 border-b border-gray-50 pb-3">
                         <span class="text-xs text-gray-500 font-bold">Daily Snipe Limit</span>
-                        <span class="text-xs text-brand-navy col-span-2 font-mono" id="setting-limit">500 trades</span>
+                        <span class="text-xs text-brand-navy col-span-2 font-mono" id="setting-limit">500,000 trades</span>
                     </div>
                     <div class="grid grid-cols-3 gap-4 border-b border-gray-50 pb-3">
                         <span class="text-xs text-gray-500 font-bold">Trading Limit Per Snipe</span>
@@ -505,11 +505,11 @@
 
                 // Balance
                 document.getElementById('billing-balance').innerText = `$${stats.balance.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
-                document.getElementById('billing-daily-trades').innerText = `${stats.tradesToday} / ${botStatus.paperMode ? 500 : 500} cap`;
+                document.getElementById('billing-daily-trades').innerText = `${stats.tradesToday} / 500,000 cap`;
                 document.getElementById('billing-avg-pnl').innerText = `${stats.avgPnL >= 0 ? '+' : ''}$${stats.avgPnL.toFixed(2)}`;
 
                 // Settings
-                document.getElementById('setting-limit').innerText = `${botStatus.botEnabled ? 'Active' : 'Paused'} (${stats.tradesToday} / ${botStatus.paperMode ? 500 : 500} daily cap)`;
+                document.getElementById('setting-limit').innerText = `${botStatus.botEnabled ? 'Active' : 'Paused'} (${stats.tradesToday} / 500,000 daily cap)`;
                 document.getElementById('setting-proxy').innerText = botStatus.paperMode ? 'N/A (Paper Account)' : 'Active Proxy';
 
                 // Target breakdown total PnL

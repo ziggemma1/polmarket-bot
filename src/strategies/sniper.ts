@@ -157,7 +157,7 @@ async function tick() {
 
     try {
         // Check daily limit
-        const limit = config?.maxDailyTrades || 500;
+        const limit = config?.maxDailyTrades || 500000;
         if (tradesToday >= limit) {
             console.log(`[Sniper] Daily limit reached. Pausing.`);
             sniperActive = false;
