@@ -241,13 +241,22 @@ app.get('/api/stats', (req, res) => {
       }
       const avgWinStreak = winStreaks.length > 0 ? winStreaks.reduce((a, b) => a + b, 0) / winStreaks.length : 0;
       
-      // Calculate PnL by crypto
-      const pnlByCrypto: { [key: string]: number } = { btc: 0, eth: 0, sol: 0, bnb: 0 };
-      const tradesCountByCrypto: { [key: string]: { wins: number, losses: number, total: number } } = {
-          btc: { wins: 0, losses: 0, total: 0 },
-          eth: { wins: 0, losses: 0, total: 0 },
-          sol: { wins: 0, losses: 0, total: 0 },
-          bnb: { wins: 0, losses: 0, total: 0 }
+      // Calculate comprehensive crypto analysis per asset including share size tiers
+      const cryptoAnalysis: {
+          [key: string]: {
+              totalPnL: number;
+              wins: number;
+              losses: number;
+              totalTrades: number;
+              winRate: number;
+              tier1: { trades: number; wins: number; losses: number; pnl: number; winRate: number };
+              tier10: { trades: number; wins: number; losses: number; pnl: number; winRate: number };
+          }
+      } = {
+          btc: { totalPnL: 0, wins: 0, losses: 0, totalTrades: 0, winRate: 0, tier1: { trades: 0, wins: 0, losses: 0, pnl: 0, winRate: 0 }, tier10: { trades: 0, wins: 0, losses: 0, pnl: 0, winRate: 0 } },
+          eth: { totalPnL: 0, wins: 0, losses: 0, totalTrades: 0, winRate: 0, tier1: { trades: 0, wins: 0, losses: 0, pnl: 0, winRate: 0 }, tier10: { trades: 0, wins: 0, losses: 0, pnl: 0, winRate: 0 } },
+          sol: { totalPnL: 0, wins: 0, losses: 0, totalTrades: 0, winRate: 0, tier1: { trades: 0, wins: 0, losses: 0, pnl: 0, winRate: 0 }, tier10: { trades: 0, wins: 0, losses: 0, pnl: 0, winRate: 0 } },
+          bnb: { totalPnL: 0, wins: 0, losses: 0, totalTrades: 0, winRate: 0, tier1: { trades: 0, wins: 0, losses: 0, pnl: 0, winRate: 0 }, tier10: { trades: 0, wins: 0, losses: 0, pnl: 0, winRate: 0 } }
       };
 
       closed.forEach((t: any) => {
@@ -259,15 +268,36 @@ app.get('/api/stats', (req, res) => {
           else if (q.includes('bnb') || q.includes('binance')) asset = 'bnb';
 
           if (asset) {
-              pnlByCrypto[asset] += t.pnl || 0;
-              tradesCountByCrypto[asset].total++;
-              if (t.pnl > 0) {
-                  tradesCountByCrypto[asset].wins++;
-              } else {
-                  tradesCountByCrypto[asset].losses++;
-              }
+              const ca = cryptoAnalysis[asset];
+              const pnl = t.pnl || 0;
+              const isWin = pnl > 0;
+              const isBoosted = (t.shares || 1) >= 10;
+
+              ca.totalPnL += pnl;
+              ca.totalTrades++;
+              if (isWin) ca.wins++; else ca.losses++;
+
+              const tier = isBoosted ? ca.tier10 : ca.tier1;
+              tier.trades++;
+              tier.pnl += pnl;
+              if (isWin) tier.wins++; else tier.losses++;
           }
       });
+
+      // Calculate win rates
+      Object.keys(cryptoAnalysis).forEach(k => {
+          const ca = cryptoAnalysis[k];
+          ca.winRate = ca.totalTrades > 0 ? (ca.wins / ca.totalTrades) * 100 : 0;
+          ca.tier1.winRate = ca.tier1.trades > 0 ? (ca.tier1.wins / ca.tier1.trades) * 100 : 0;
+          ca.tier10.winRate = ca.tier10.trades > 0 ? (ca.tier10.wins / ca.tier10.trades) * 100 : 0;
+      });
+
+      const pnlByCrypto: { [key: string]: number } = {
+          btc: cryptoAnalysis.btc.totalPnL,
+          eth: cryptoAnalysis.eth.totalPnL,
+          sol: cryptoAnalysis.sol.totalPnL,
+          bnb: cryptoAnalysis.bnb.totalPnL
+      };
 
       res.json({
         ...stats,
@@ -280,7 +310,7 @@ app.get('/api/stats', (req, res) => {
         avgTradeSize,
         avgWinStreak,
         pnlByCrypto,
-        tradesCountByCrypto
+        cryptoAnalysis
       });
     } else {
       res.status(500).json({ error: 'Paper trader not initialized' });

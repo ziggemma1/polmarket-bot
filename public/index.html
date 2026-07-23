@@ -271,6 +271,23 @@
                     <div class="w-full" style="height: 320px;" id="main-area-chart"></div>
                 </div>
 
+                <!-- INDIVIDUAL CRYPTO ASSET ANALYSIS CARDS (4 PAIRS) -->
+                <div class="space-y-4">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div>
+                            <h3 class="font-outfit font-extrabold text-lg text-brand-navy">Crypto Asset Performance & Share Size Analysis</h3>
+                            <p class="text-xs text-gray-400">Wins, Losses, and Profit breakdown for Standard (1 Share) vs Boosted (10 Shares) trades across all 4 pairs</p>
+                        </div>
+                        <span class="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-full text-[10px] font-bold uppercase tracking-wider self-start sm:self-auto">
+                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> Live 4-Pair Analytics
+                        </span>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6" id="crypto-cards-grid">
+                        <!-- Dynamic 4 Crypto Asset Cards Rendered via JS -->
+                    </div>
+                </div>
+
                 <!-- Bottom sections split -->
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
                     <!-- Bottom Left: Top Performing Assets -->
@@ -564,56 +581,131 @@
         }
 
         function updateCryptoBreakdown(stats) {
-            const pnlByCrypto = stats.pnlByCrypto || { btc: 0, eth: 0, sol: 0, bnb: 0 };
-            const tradesCount = stats.tradesCountByCrypto || {
-                btc: { wins: 0, losses: 0, total: 0 },
-                eth: { wins: 0, losses: 0, total: 0 },
-                sol: { wins: 0, losses: 0, total: 0 },
-                bnb: { wins: 0, losses: 0, total: 0 }
+            const cryptoAnalysis = stats.cryptoAnalysis || {
+                btc: { totalPnL: 0, wins: 0, losses: 0, totalTrades: 0, winRate: 0, tier1: { trades: 0, wins: 0, losses: 0, pnl: 0, winRate: 0 }, tier10: { trades: 0, wins: 0, losses: 0, pnl: 0, winRate: 0 } },
+                eth: { totalPnL: 0, wins: 0, losses: 0, totalTrades: 0, winRate: 0, tier1: { trades: 0, wins: 0, losses: 0, pnl: 0, winRate: 0 }, tier10: { trades: 0, wins: 0, losses: 0, pnl: 0, winRate: 0 } },
+                sol: { totalPnL: 0, wins: 0, losses: 0, totalTrades: 0, winRate: 0, tier1: { trades: 0, wins: 0, losses: 0, pnl: 0, winRate: 0 }, tier10: { trades: 0, wins: 0, losses: 0, pnl: 0, winRate: 0 } },
+                bnb: { totalPnL: 0, wins: 0, losses: 0, totalTrades: 0, winRate: 0, tier1: { trades: 0, wins: 0, losses: 0, pnl: 0, winRate: 0 }, tier10: { trades: 0, wins: 0, losses: 0, pnl: 0, winRate: 0 } }
             };
 
-            const assets = ['btc', 'eth', 'sol', 'bnb'];
+            // 1. Render 4 Crypto Cards Grid
+            const gridContainer = document.getElementById('crypto-cards-grid');
+            if (gridContainer) {
+                gridContainer.innerHTML = '';
+                const assets = [
+                    { id: 'btc', name: 'Bitcoin', symbol: 'BTC', threshold: '$70.00', bg: 'bg-amber-50', border: 'border-amber-100', text: 'text-amber-600' },
+                    { id: 'eth', name: 'Ethereum', symbol: 'ETH', threshold: '$5.00', bg: 'bg-indigo-50', border: 'border-indigo-100', text: 'text-indigo-600' },
+                    { id: 'sol', name: 'Solana', symbol: 'SOL', threshold: '$0.19', bg: 'bg-emerald-50', border: 'border-emerald-100', text: 'text-emerald-600' },
+                    { id: 'bnb', name: 'Binance Coin', symbol: 'BNB', threshold: '$0.60', bg: 'bg-yellow-50', border: 'border-yellow-100', text: 'text-yellow-600' }
+                ];
 
-            // Update bottom left table: Top Performing Cryptos
+                assets.forEach(asset => {
+                    const data = cryptoAnalysis[asset.id] || { totalPnL: 0, wins: 0, losses: 0, totalTrades: 0, winRate: 0, tier1: { trades: 0, wins: 0, losses: 0, pnl: 0, winRate: 0 }, tier10: { trades: 0, wins: 0, losses: 0, pnl: 0, winRate: 0 } };
+                    
+                    const pnlClass = data.totalPnL >= 0 ? 'text-emerald-500' : 'text-brand-orange';
+                    const pnlStr = `${data.totalPnL >= 0 ? '+' : ''}$${data.totalPnL.toFixed(2)}`;
+                    
+                    const tier1PnlStr = `${data.tier1.pnl >= 0 ? '+' : ''}$${data.tier1.pnl.toFixed(2)}`;
+                    const tier10PnlStr = `${data.tier10.pnl >= 0 ? '+' : ''}$${data.tier10.pnl.toFixed(2)}`;
+
+                    const card = document.createElement('div');
+                    card.className = 'bg-white border border-gray-100 rounded-2xl p-5 card-shadow flex flex-col justify-between hover:border-gray-200 transition duration-150';
+                    card.innerHTML = `
+                        <!-- Header -->
+                        <div class="flex items-center justify-between border-b border-gray-50 pb-3 mb-3">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-xl ${asset.bg} ${asset.border} border flex items-center justify-center font-extrabold ${asset.text} font-mono text-xs">
+                                    ${asset.symbol}
+                                </div>
+                                <div>
+                                    <h4 class="text-sm font-bold text-gray-900 leading-tight">${asset.name}</h4>
+                                    <span class="text-[10px] text-gray-400 font-medium">${data.totalTrades} Trades Total</span>
+                                </div>
+                            </div>
+                            <div class="text-right">
+                                <span class="block text-[10px] font-bold text-gray-400 uppercase tracking-wider">Net PnL</span>
+                                <span class="block text-base font-outfit font-extrabold ${pnlClass}">${pnlStr}</span>
+                            </div>
+                        </div>
+
+                        <!-- Win / Loss Stats & Win Rate Progress Bar -->
+                        <div class="space-y-1.5 mb-4">
+                            <div class="flex justify-between items-center text-xs">
+                                <span class="font-medium text-gray-500">Overall Win Rate</span>
+                                <span class="font-bold text-brand-navy font-mono">${data.winRate.toFixed(1)}%</span>
+                            </div>
+                            <div class="w-full h-2 bg-gray-100 rounded-full overflow-hidden flex">
+                                <div class="h-full bg-emerald-500 transition-all duration-300" style="width: ${data.winRate}%"></div>
+                                <div class="h-full bg-brand-orange transition-all duration-300" style="width: ${100 - data.winRate}%"></div>
+                            </div>
+                            <div class="flex justify-between text-[10px] text-gray-400 font-medium pt-0.5">
+                                <span>🟢 ${data.wins}W / 🔴 ${data.losses}L</span>
+                                <span class="font-mono text-gray-400">Threshold: ${asset.threshold}</span>
+                            </div>
+                        </div>
+
+                        <!-- 2 Share Size Tier Breakdown Grid -->
+                        <div class="grid grid-cols-2 gap-2 pt-3 border-t border-gray-50">
+                            <!-- Standard 1 Share Tier -->
+                            <div class="bg-gray-50/80 border border-gray-100 rounded-xl p-2.5 text-center">
+                                <span class="block text-[9px] font-bold text-gray-400 uppercase tracking-wider">Standard (1 Share)</span>
+                                <span class="block text-xs font-bold ${data.tier1.pnl >= 0 ? 'text-emerald-600' : 'text-rose-500'} mt-0.5 font-mono">${tier1PnlStr}</span>
+                                <span class="block text-[9px] text-gray-500 mt-0.5">${data.tier1.trades} Trades (${data.tier1.wins}W / ${data.tier1.losses}L)</span>
+                            </div>
+                            <!-- Boosted 10 Shares Tier -->
+                            <div class="bg-emerald-50/60 border border-emerald-100 rounded-xl p-2.5 text-center">
+                                <span class="block text-[9px] font-bold text-emerald-800 uppercase tracking-wider">Boosted (10 Shares)</span>
+                                <span class="block text-xs font-bold ${data.tier10.pnl >= 0 ? 'text-emerald-600' : 'text-rose-500'} mt-0.5 font-mono">${tier10PnlStr}</span>
+                                <span class="block text-[9px] text-emerald-700 mt-0.5">${data.tier10.trades} Trades (${data.tier10.wins}W / ${data.tier10.losses}L)</span>
+                            </div>
+                        </div>
+                    `;
+                    gridContainer.appendChild(card);
+                });
+            }
+
+            // 2. Update bottom left table: Top Performing Cryptos
             const tbody = document.getElementById('performing-cryptos-body');
-            tbody.innerHTML = '';
-            
-            const list = assets.map(a => {
-                let name = 'Bitcoin';
-                if (a === 'eth') name = 'Ethereum';
-                else if (a === 'sol') name = 'Solana';
-                else if (a === 'bnb') name = 'Binance (BNB)';
-                return {
-                    id: a,
-                    name,
-                    pnl: pnlByCrypto[a] || 0,
-                    wins: tradesCount[a]?.wins || 0,
-                    losses: tradesCount[a]?.losses || 0,
-                };
-            }).sort((a, b) => b.pnl - a.pnl);
+            if (tbody) {
+                tbody.innerHTML = '';
+                const assetsList = ['btc', 'eth', 'sol', 'bnb'].map(a => {
+                    let name = 'Bitcoin';
+                    if (a === 'eth') name = 'Ethereum';
+                    else if (a === 'sol') name = 'Solana';
+                    else if (a === 'bnb') name = 'Binance (BNB)';
+                    const ca = cryptoAnalysis[a] || { totalPnL: 0, wins: 0, losses: 0 };
+                    return {
+                        id: a,
+                        name,
+                        pnl: ca.totalPnL,
+                        wins: ca.wins,
+                        losses: ca.losses,
+                    };
+                }).sort((a, b) => b.pnl - a.pnl);
 
-            list.forEach(item => {
-                const row = document.createElement('tr');
-                row.className = 'hover:bg-gray-50/50 transition';
-                
-                let coinColor = 'bg-brand-orange';
-                if (item.id === 'eth') coinColor = 'bg-brand-navy';
-                else if (item.id === 'sol') coinColor = 'bg-brand-teal';
-                else if (item.id === 'bnb') coinColor = 'bg-amber-400';
+                assetsList.forEach(item => {
+                    const row = document.createElement('tr');
+                    row.className = 'hover:bg-gray-50/50 transition';
+                    
+                    let coinColor = 'bg-brand-orange';
+                    if (item.id === 'eth') coinColor = 'bg-brand-navy';
+                    else if (item.id === 'sol') coinColor = 'bg-brand-teal';
+                    else if (item.id === 'bnb') coinColor = 'bg-amber-400';
 
-                row.innerHTML = `
-                    <td class="py-3 flex items-center gap-2">
-                        <span class="w-2.5 h-2.5 rounded-full ${coinColor}"></span>
-                        <span class="font-semibold text-gray-900">${item.name}</span>
-                    </td>
-                    <td class="py-3 text-right font-mono font-bold ${item.pnl >= 0 ? 'text-emerald-500' : 'text-brand-orange'}">
-                        ${item.pnl >= 0 ? '+' : ''}$${item.pnl.toFixed(2)}
-                    </td>
-                    <td class="py-3 text-center font-mono text-gray-500">${item.wins}</td>
-                    <td class="py-3 text-center font-mono text-gray-500">${item.losses}</td>
-                `;
-                tbody.appendChild(row);
-            });
+                    row.innerHTML = `
+                        <td class="py-3 flex items-center gap-2">
+                            <span class="w-2.5 h-2.5 rounded-full ${coinColor}"></span>
+                            <span class="font-semibold text-gray-900">${item.name}</span>
+                        </td>
+                        <td class="py-3 text-right font-mono font-bold ${item.pnl >= 0 ? 'text-emerald-500' : 'text-brand-orange'}">
+                            ${item.pnl >= 0 ? '+' : ''}$${item.pnl.toFixed(2)}
+                        </td>
+                        <td class="py-3 text-center font-mono text-gray-500">${item.wins}</td>
+                        <td class="py-3 text-center font-mono text-gray-500">${item.losses}</td>
+                    `;
+                    tbody.appendChild(row);
+                });
+            }
         }
 
         function updateTables(trades) {
