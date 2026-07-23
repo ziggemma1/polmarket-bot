@@ -242,21 +242,21 @@ app.get('/api/stats', (req, res) => {
       const avgWinStreak = winStreaks.length > 0 ? winStreaks.reduce((a, b) => a + b, 0) / winStreaks.length : 0;
       
       // Calculate PnL by crypto
-      const pnlByCrypto: { [key: string]: number } = { btc: 0, eth: 0, sol: 0, xrp: 0 };
+      const pnlByCrypto: { [key: string]: number } = { btc: 0, eth: 0, sol: 0, bnb: 0 };
       const tradesCountByCrypto: { [key: string]: { wins: number, losses: number, total: number } } = {
           btc: { wins: 0, losses: 0, total: 0 },
           eth: { wins: 0, losses: 0, total: 0 },
           sol: { wins: 0, losses: 0, total: 0 },
-          xrp: { wins: 0, losses: 0, total: 0 }
+          bnb: { wins: 0, losses: 0, total: 0 }
       };
 
       closed.forEach((t: any) => {
           const q = (t.question || '').toLowerCase();
-          let asset: 'btc' | 'eth' | 'sol' | 'xrp' | null = null;
-          if (q.includes('bitcoin')) asset = 'btc';
-          else if (q.includes('ethereum')) asset = 'eth';
-          else if (q.includes('solana')) asset = 'sol';
-          else if (q.includes('xrp')) asset = 'xrp';
+          let asset: 'btc' | 'eth' | 'sol' | 'bnb' | null = null;
+          if (q.includes('bitcoin') || q.includes('btc')) asset = 'btc';
+          else if (q.includes('ethereum') || q.includes('eth')) asset = 'eth';
+          else if (q.includes('solana') || q.includes('sol')) asset = 'sol';
+          else if (q.includes('bnb') || q.includes('binance')) asset = 'bnb';
 
           if (asset) {
               pnlByCrypto[asset] += t.pnl || 0;

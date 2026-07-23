@@ -530,14 +530,15 @@
         }
 
         function updateCryptoBreakdown(stats) {
-            const pnlByCrypto = stats.pnlByCrypto || { btc: 0, eth: 0, sol: 0 };
+            const pnlByCrypto = stats.pnlByCrypto || { btc: 0, eth: 0, sol: 0, bnb: 0 };
             const tradesCount = stats.tradesCountByCrypto || {
                 btc: { wins: 0, losses: 0, total: 0 },
                 eth: { wins: 0, losses: 0, total: 0 },
-                sol: { wins: 0, losses: 0, total: 0 }
+                sol: { wins: 0, losses: 0, total: 0 },
+                bnb: { wins: 0, losses: 0, total: 0 }
             };
 
-            const assets = ['btc', 'eth', 'sol'];
+            const assets = ['btc', 'eth', 'sol', 'bnb'];
 
             // Update bottom left table: Top Performing Cryptos
             const tbody = document.getElementById('performing-cryptos-body');
@@ -547,6 +548,7 @@
                 let name = 'Bitcoin';
                 if (a === 'eth') name = 'Ethereum';
                 else if (a === 'sol') name = 'Solana';
+                else if (a === 'bnb') name = 'Binance (BNB)';
                 return {
                     id: a,
                     name,
@@ -563,6 +565,7 @@
                 let coinColor = 'bg-brand-orange';
                 if (item.id === 'eth') coinColor = 'bg-brand-navy';
                 else if (item.id === 'sol') coinColor = 'bg-brand-teal';
+                else if (item.id === 'bnb') coinColor = 'bg-amber-400';
 
                 row.innerHTML = `
                     <td class="py-3 flex items-center gap-2">
@@ -729,6 +732,7 @@
                 if (q.includes('bitcoin') || q.includes('btc')) return 'btc';
                 if (q.includes('ethereum') || q.includes('eth')) return 'eth';
                 if (q.includes('solana') || q.includes('sol')) return 'sol';
+                if (q.includes('bnb') || q.includes('binance')) return 'bnb';
                 return 'other';
             }
 
@@ -758,9 +762,9 @@
                 chartStart.setDate(1); chartStart.setHours(0, 0, 0, 0);
             }
 
-            const assets = ['btc', 'eth', 'sol'];
-            const assetColors = { btc: '#F04438', eth: '#0B192C', sol: '#12B76A' };
-            const assetNames = { btc: 'Bitcoin', eth: 'Ethereum', sol: 'Solana' };
+            const assets = ['btc', 'eth', 'sol', 'bnb'];
+            const assetColors = { btc: '#F04438', eth: '#0B192C', sol: '#12B76A', bnb: '#F3BA2F' };
+            const assetNames = { btc: 'Bitcoin', eth: 'Ethereum', sol: 'Solana', bnb: 'Binance' };
 
             // Initial cumulative P&L per asset (trades before chart start)
             const initPnL = {};
@@ -851,7 +855,7 @@
                 },
                 series: allSeries,
                 colors: [
-                    assetColors.btc, assetColors.eth, assetColors.sol, assetColors.xrp,
+                    assetColors.btc, assetColors.eth, assetColors.sol, assetColors.bnb,
                     '#12B76A', '#F04438'
                 ],
                 stroke: {
@@ -928,15 +932,16 @@
             }
 
             // 3. User Retention Cohorts stylized segmented pillars (vertical columns wins/losses per crypto)
-            const cryptoTrades = { btc: 0, eth: 0, sol: 0 };
-            const cryptoWins = { btc: 0, eth: 0, sol: 0 };
+            const cryptoTrades = { btc: 0, eth: 0, sol: 0, bnb: 0 };
+            const cryptoWins = { btc: 0, eth: 0, sol: 0, bnb: 0 };
             
             closedTrades.forEach(t => {
                 const q = t.question.toLowerCase();
                 let asset = '';
-                if (q.includes('bitcoin')) asset = 'btc';
-                else if (q.includes('ethereum')) asset = 'eth';
-                else if (q.includes('solana')) asset = 'sol';
+                if (q.includes('bitcoin') || q.includes('btc')) asset = 'btc';
+                else if (q.includes('ethereum') || q.includes('eth')) asset = 'eth';
+                else if (q.includes('solana') || q.includes('sol')) asset = 'sol';
+                else if (q.includes('bnb') || q.includes('binance')) asset = 'bnb';
 
                 if (asset) {
                     cryptoTrades[asset]++;
@@ -954,14 +959,15 @@
                 series: [
                     {
                         name: 'Wins',
-                        data: [cryptoWins.btc, cryptoWins.eth, cryptoWins.sol]
+                        data: [cryptoWins.btc, cryptoWins.eth, cryptoWins.sol, cryptoWins.bnb]
                     },
                     {
                         name: 'Losses',
                         data: [
                             cryptoTrades.btc - cryptoWins.btc,
                             cryptoTrades.eth - cryptoWins.eth,
-                            cryptoTrades.sol - cryptoWins.sol
+                            cryptoTrades.sol - cryptoWins.sol,
+                            cryptoTrades.bnb - cryptoWins.bnb
                         ]
                     }
                 ],
@@ -978,7 +984,7 @@
                     strokeDashArray: 4
                 },
                 xaxis: {
-                    categories: ['BTC', 'ETH', 'SOL'],
+                    categories: ['BTC', 'ETH', 'SOL', 'BNB'],
                     axisBorder: { show: false },
                     axisTicks: { show: false }
                 },

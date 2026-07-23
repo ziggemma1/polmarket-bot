@@ -52,32 +52,50 @@ async function settleExpiredPositions() {
         console.log(`[Sniper] Found ${expired.length} expired paper positions. Resolving outcomes...`);
 
         // Cache prices to avoid multiple fetches for the same ticker
-        const priceCache: { [key: string]: number | null } = { btc: null, eth: null, sol: null };
-        const getPrice = async (t: 'btc' | 'eth' | 'sol') => {
+        const priceCache: { [key: string]: number | null } = { btc: null, eth: null, sol: null, bnb: null };
+        const getPrice = async (t: 'btc' | 'eth' | 'sol' | 'bnb') => {
             if (priceCache[t] !== null) return priceCache[t];
             try {
                 const response = await fetch(`https://api.coinbase.com/v2/prices/${t.toUpperCase()}-USD/spot`);
                 const data = await response.json();
-                const price = parseFloat(data.data.amount);
-                console.log(`[Sniper] Expiry ${t.toUpperCase()} Price from Coinbase: $${price}`);
-                priceCache[t] = price;
-                return price;
+                const price = parseFloat(data?.data?.amount);
+                if (price && !isNaN(price)) {
+                    console.log(`[Sniper] Expiry ${t.toUpperCase()} Price from Coinbase: $${price}`);
+                    priceCache[t] = price;
+                    return price;
+                }
+            } catch (err) {
+                // Ignore and try fallback
+            }
+
+            try {
+                const response = await fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${t.toUpperCase()}USDT`);
+                const data = await response.json();
+                const price = parseFloat(data?.price);
+                if (price && !isNaN(price)) {
+                    console.log(`[Sniper] Expiry ${t.toUpperCase()} Price from Binance: $${price}`);
+                    priceCache[t] = price;
+                    return price;
+                }
             } catch (err) {
                 console.error(`[Sniper] Failed to fetch ${t.toUpperCase()} price for instant settlement:`, err);
-                return null;
             }
+
+            return null;
         };
 
         for (const position of expired) {
             console.log(`[Sniper] 🔄 Settling expired position ${position.id} instantly...`);
 
             // Parse ticker from question text
-            let ticker: 'btc' | 'eth' | 'sol' = 'btc';
+            let ticker: 'btc' | 'eth' | 'sol' | 'bnb' = 'btc';
             const q = (position.question || '').toLowerCase();
-            if (q.includes('ethereum')) {
+            if (q.includes('ethereum') || q.includes('eth')) {
                 ticker = 'eth';
-            } else if (q.includes('solana')) {
+            } else if (q.includes('solana') || q.includes('sol')) {
                 ticker = 'sol';
+            } else if (q.includes('bnb') || q.includes('binance')) {
+                ticker = 'bnb';
             }
 
             const price = await getPrice(ticker);
@@ -89,33 +107,31 @@ async function settleExpiredPositions() {
                 const strikePrice = position.strike_price || 0;
                 if (position.side === 'YES' && price > strikePrice) {
                     exitPrice = 1.00;
-                    outcome = '✅ WIN';
+                    outcome = 'WIN';
                 } else if (position.side === 'NO' && price < strikePrice) {
                     exitPrice = 1.00;
-                    outcome = '✅ WIN';
+                    outcome = 'WIN';
                 }
-            } else {
-                console.log(`[Sniper] Price is null for ${ticker.toUpperCase()} position ${position.id}, defaulting to LOSS`);
             }
+
+            const pnl = exitPrice === 1.00 
+                ? (position.shares * 1.00) - (position.shares * position.entry_price)
+                : -(position.shares * position.entry_price);
 
             const result = await paperTrader.closePosition(position.id, exitPrice);
             if (result.success) {
                 const pnl = result.pnl || 0;
-                console.log(`[Sniper] Instant check: ${outcome} Position ${position.id} closed: PnL = ${pnl.toFixed(2)}`);
-                
-                if (config.telegramService) {
+                console.log(`[Sniper] Settled position ${position.id} (${position.question}): ${outcome} (PnL: $${pnl.toFixed(2)})`);
+
+                if (config?.telegramService) {
                     config.telegramService.sendAlert(
-                        `📊 PAPER: Position Settled (Instant)\n` +
-                        `Market: ${position.question || 'Unknown'}\n` +
-                        `Side: ${position.side}\n` +
-                        `Result: ${outcome}\n` +
-                        `${ticker.toUpperCase()} at Expiry: $${price ? price.toLocaleString() : 'N/A'}\n` +
-                        `Strike Price: ${position.strike_price ? position.strike_price.toLocaleString() : 'N/A'}\n` +
-                        `PnL: $${pnl.toFixed(2)}`
+                        `📄 PAPER: Position Settled\n` +
+                        `Market: ${position.question}\n` +
+                        `Outcome: ${outcome}\n` +
+                        `Exit Price: $${exitPrice}\n` +
+                        `Net PnL: ${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}`
                     );
                 }
-            } else {
-                console.error(`[Sniper] Failed to close expired position ${position.id}: ${result.error}`);
             }
         }
     } catch (error) {
@@ -157,8 +173,8 @@ async function tick() {
             executedMarketIds.clear();
         }
 
-        // Scan BTC, ETH, and SOL markets in parallel
-        const tickers: ('btc' | 'eth' | 'sol')[] = ['btc', 'eth', 'sol'];
+        // Scan BTC, ETH, SOL, and BNB markets in parallel
+        const tickers: ('btc' | 'eth' | 'sol' | 'bnb')[] = ['btc', 'eth', 'sol', 'bnb'];
         for (const ticker of tickers) {
             const market = await getCurrentMarket(ticker);
             if (!market) continue;
@@ -207,7 +223,7 @@ async function tick() {
     setTimeout(tick, CHECK_INTERVAL);
 }
 
-async function executeSnipe(market: any, ticker: 'btc' | 'eth' | 'sol'): Promise<{ 
+async function executeSnipe(market: any, ticker: 'btc' | 'eth' | 'sol' | 'bnb'): Promise<{ 
     success: boolean; 
     side?: string; 
     price?: number; 
@@ -216,19 +232,33 @@ async function executeSnipe(market: any, ticker: 'btc' | 'eth' | 'sol'): Promise
     error?: string;
 }> {
     try {
-        // 1. Fetch spot price from Coinbase
-        const coinbaseResponse = await fetch(`https://api.coinbase.com/v2/prices/${ticker.toUpperCase()}-USD/spot`);
-        const coinbaseData = await coinbaseResponse.json();
-        const priceValue = parseFloat(coinbaseData?.data?.amount);
+        // 1. Fetch spot price (Coinbase first, Binance fallback)
+        let priceValue = 0;
+        try {
+            const coinbaseResponse = await fetch(`https://api.coinbase.com/v2/prices/${ticker.toUpperCase()}-USD/spot`);
+            const coinbaseData = await coinbaseResponse.json();
+            priceValue = parseFloat(coinbaseData?.data?.amount);
+        } catch (e) {}
+
+        if (!priceValue || isNaN(priceValue)) {
+            try {
+                const binanceResponse = await fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${ticker.toUpperCase()}USDT`);
+                const binanceData = await binanceResponse.json();
+                priceValue = parseFloat(binanceData?.price);
+            } catch (e) {}
+        }
+
         if (!priceValue || isNaN(priceValue)) {
             return { success: false, error: `Could not fetch spot price for ${ticker.toUpperCase()}` };
         }
-        console.log(`[Sniper] ${ticker.toUpperCase()} Price from Coinbase: $${priceValue}`);
+        console.log(`[Sniper] ${ticker.toUpperCase()} Spot Price: $${priceValue}`);
 
-        // 2. Fetch the strike price (open price of the 5m candle) from Coinbase Exchange API
+        // 2. Fetch the strike price (open price of the 5m candle)
         let strikePrice = 0;
+        const startTimestamp = parseInt(market.slug.split('-').pop() || '0');
+        
+        // Try Coinbase Exchange candles first
         try {
-            const startTimestamp = parseInt(market.slug.split('-').pop() || '0');
             if (startTimestamp > 0) {
                 const cbResponse = await fetch(`https://api.exchange.coinbase.com/products/${ticker.toUpperCase()}-USD/candles?granularity=300`, {
                     headers: { 'User-Agent': 'polmarket-bot' }
@@ -238,12 +268,27 @@ async function executeSnipe(market: any, ticker: 'btc' | 'eth' | 'sol'): Promise
                     const candle = klines.find((k: any) => k[0] === startTimestamp);
                     if (candle) {
                         strikePrice = parseFloat(candle[3]); // Index 3 is open price
-                        console.log(`[Sniper] Found Coinbase candle for ${ticker.toUpperCase()} start timestamp ${startTimestamp}. Open price (strikePrice): $${strikePrice}`);
+                        console.log(`[Sniper] Found Coinbase candle for ${ticker.toUpperCase()} start timestamp ${startTimestamp}. Open price: $${strikePrice}`);
                     }
                 }
             }
-        } catch (e: any) {
-            console.log(`[Sniper] Could not fetch strike price from Coinbase candles: ${e.message}`);
+        } catch (e: any) {}
+
+        // Fallback to Binance klines if Coinbase strike price is missing
+        if (!strikePrice || isNaN(strikePrice)) {
+            try {
+                if (startTimestamp > 0) {
+                    const binanceResponse = await fetch(`https://api.binance.com/api/v3/klines?symbol=${ticker.toUpperCase()}USDT&interval=5m&limit=10`);
+                    const binanceKlines = await binanceResponse.json();
+                    if (Array.isArray(binanceKlines)) {
+                        const candle = binanceKlines.find((k: any) => Math.floor(k[0] / 1000) === startTimestamp);
+                        if (candle) {
+                            strikePrice = parseFloat(candle[1]); // Index 1 is open price in Binance klines
+                            console.log(`[Sniper] Found Binance candle for ${ticker.toUpperCase()} start timestamp ${startTimestamp}. Open price: $${strikePrice}`);
+                        }
+                    }
+                }
+            } catch (e: any) {}
         }
 
         if (!strikePrice || isNaN(strikePrice)) {
