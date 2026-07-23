@@ -231,7 +231,7 @@ const MIN_GAP_THRESHOLDS: { [key in 'btc' | 'eth' | 'sol' | 'bnb']: number } = {
     btc: 10.00,
     eth: 0.90,
     sol: 0.05,
-    bnb: 0.03
+    bnb: 0.20
 };
 
 const BOOST_GAP_THRESHOLDS: { [key in 'btc' | 'eth' | 'sol' | 'bnb']: number } = {
