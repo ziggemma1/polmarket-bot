@@ -376,6 +376,45 @@
 
         <!-- TAB: ANALYTICS -->
         <div id="tab-analytics" class="tab-content hidden space-y-8">
+            
+            <!-- DEDICATED INDIVIDUAL CRYPTO VISUALIZATIONS SECTION -->
+            <div class="bg-white border border-gray-100 rounded-2xl p-6 card-shadow space-y-6">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-50 pb-4">
+                    <div>
+                        <h3 class="font-outfit font-extrabold text-xl text-brand-navy">Individual Crypto Visual Analytics</h3>
+                        <p class="text-xs text-gray-400">Detailed interactive performance, win/loss breakdown, and yield trajectory per crypto pair</p>
+                    </div>
+                    <!-- Crypto Selector Toggles -->
+                    <div class="flex flex-wrap items-center gap-2 bg-gray-50 p-1.5 rounded-xl border border-gray-100" id="crypto-viz-selector">
+                        <button onclick="selectCryptoViz('all')" id="cviz-all" class="px-3 py-1.5 text-xs font-bold rounded-lg transition bg-brand-navy text-white shadow-sm">All Cryptos</button>
+                        <button onclick="selectCryptoViz('btc')" id="cviz-btc" class="px-3 py-1.5 text-xs font-bold rounded-lg transition text-gray-600 hover:text-brand-navy">Bitcoin (BTC)</button>
+                        <button onclick="selectCryptoViz('eth')" id="cviz-eth" class="px-3 py-1.5 text-xs font-bold rounded-lg transition text-gray-600 hover:text-brand-navy">Ethereum (ETH)</button>
+                        <button onclick="selectCryptoViz('sol')" id="cviz-sol" class="px-3 py-1.5 text-xs font-bold rounded-lg transition text-gray-600 hover:text-brand-navy">Solana (SOL)</button>
+                        <button onclick="selectCryptoViz('bnb')" id="cviz-bnb" class="px-3 py-1.5 text-xs font-bold rounded-lg transition text-gray-600 hover:text-brand-navy">Binance (BNB)</button>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    <!-- Chart 1: Per-Crypto Cumulative Yield Curve -->
+                    <div>
+                        <div class="flex justify-between items-center mb-3">
+                            <h4 class="text-sm font-bold text-gray-900" id="crypto-chart-yield-title">Cumulative PnL Trajectory</h4>
+                            <span class="text-[10px] text-emerald-600 font-bold bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-md" id="crypto-chart-yield-badge">Yield Curve</span>
+                        </div>
+                        <div class="w-full h-72" id="crypto-dedicated-yield-chart"></div>
+                    </div>
+
+                    <!-- Chart 2: Share Size Tier Breakdown (Wins vs Losses per Share Tier) -->
+                    <div>
+                        <div class="flex justify-between items-center mb-3">
+                            <h4 class="text-sm font-bold text-gray-900" id="crypto-chart-tier-title">Share Size Tier Performance (1 vs 10 Shares)</h4>
+                            <span class="text-[10px] text-indigo-600 font-bold bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-md">Wins & Losses</span>
+                        </div>
+                        <div class="w-full h-72" id="crypto-dedicated-tier-chart"></div>
+                    </div>
+                </div>
+            </div>
+
             <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
                 <!-- Cumulative Profit Chart -->
                 <div class="bg-white border border-gray-100 rounded-2xl p-6 card-shadow">
@@ -1136,7 +1175,132 @@
             }
         }
 
+        let selectedCryptoViz = 'all';
+        let cryptoDedicatedYieldChartInstance = null;
+        let cryptoDedicatedTierChartInstance = null;
+
+        function selectCryptoViz(crypto) {
+            selectedCryptoViz = crypto;
+            ['all', 'btc', 'eth', 'sol', 'bnb'].forEach(c => {
+                const btn = document.getElementById(`cviz-${c}`);
+                if (btn) {
+                    if (c === crypto) {
+                        btn.className = "px-3 py-1.5 text-xs font-bold rounded-lg transition bg-brand-navy text-white shadow-sm";
+                    } else {
+                        btn.className = "px-3 py-1.5 text-xs font-bold rounded-lg transition text-gray-600 hover:text-brand-navy";
+                    }
+                }
+            });
+            renderCryptoDedicatedCharts();
+        }
+
+        function renderCryptoDedicatedCharts() {
+            const closedTrades = allTrades.filter(t => t.status === 'closed');
+            const filteredTrades = closedTrades.filter(t => {
+                if (selectedCryptoViz === 'all') return true;
+                const q = t.question.toLowerCase();
+                if (selectedCryptoViz === 'btc') return q.includes('bitcoin') || q.includes('btc');
+                if (selectedCryptoViz === 'eth') return q.includes('ethereum') || q.includes('eth');
+                if (selectedCryptoViz === 'sol') return q.includes('solana') || q.includes('sol');
+                if (selectedCryptoViz === 'bnb') return q.includes('bnb') || q.includes('binance');
+                return true;
+            }).sort((a, b) => new Date(a.entry_time).getTime() - new Date(b.entry_time).getTime());
+
+            const cryptoNames = { all: 'All Cryptos', btc: 'Bitcoin (BTC)', eth: 'Ethereum (ETH)', sol: 'Solana (SOL)', bnb: 'Binance Coin (BNB)' };
+            const cryptoColors = { all: '#14B8A6', btc: '#F59E0B', eth: '#6366F1', sol: '#10B981', bnb: '#EAB308' };
+
+            const yieldTitle = document.getElementById('crypto-chart-yield-title');
+            if (yieldTitle) yieldTitle.innerText = `${cryptoNames[selectedCryptoViz]} Yield Trajectory`;
+
+            // 1. Yield Trajectory Chart
+            let runningSum = 0;
+            const progression = filteredTrades.map(t => {
+                runningSum += t.pnl;
+                return parseFloat(runningSum.toFixed(2));
+            });
+            const categories = filteredTrades.map((t, idx) => `#${t.id}`);
+
+            const yieldOptions = {
+                chart: { type: 'area', height: 270, toolbar: { show: false }, foreColor: '#98A2B3' },
+                series: [{ name: `${cryptoNames[selectedCryptoViz]} PnL`, data: progression.length > 0 ? progression : [0] }],
+                colors: [cryptoColors[selectedCryptoViz]],
+                fill: {
+                    type: 'gradient',
+                    gradient: {
+                        shadeIntensity: 1,
+                        opacityFrom: 0.45,
+                        opacityTo: 0.05,
+                        stops: [0, 90, 100]
+                    }
+                },
+                stroke: { curve: 'smooth', width: 3 },
+                grid: { borderColor: '#F2F4F7', strokeDashArray: 4 },
+                xaxis: { categories: categories.length > 0 ? categories : ['No trades'], axisBorder: { show: false }, axisTicks: { show: false } },
+                yaxis: { labels: { formatter: val => (val >= 0 ? '+' : '') + '$' + val.toFixed(2) } },
+                tooltip: { y: { formatter: val => (val >= 0 ? '+' : '') + '$' + val.toFixed(2) } }
+            };
+
+            const chartEl1 = document.querySelector("#crypto-dedicated-yield-chart");
+            if (chartEl1) {
+                if (cryptoDedicatedYieldChartInstance) {
+                    cryptoDedicatedYieldChartInstance.updateOptions(yieldOptions);
+                } else {
+                    cryptoDedicatedYieldChartInstance = new ApexCharts(chartEl1, yieldOptions);
+                    cryptoDedicatedYieldChartInstance.render();
+                }
+            }
+
+            // 2. Share Tier Breakdown Bar Chart (1 Share vs 10 Shares)
+            let tier1Wins = 0, tier1Losses = 0;
+            let tier10Wins = 0, tier10Losses = 0;
+
+            filteredTrades.forEach(t => {
+                const isBoosted = (t.shares || 1) >= 10;
+                const isWin = t.pnl > 0;
+                if (isBoosted) {
+                    if (isWin) tier10Wins++; else tier10Losses++;
+                } else {
+                    if (isWin) tier1Wins++; else tier1Losses++;
+                }
+            });
+
+            const tierOptions = {
+                chart: { type: 'bar', height: 270, toolbar: { show: false } },
+                series: [
+                    { name: 'Wins 🟢', data: [tier1Wins, tier10Wins] },
+                    { name: 'Losses 🔴', data: [tier1Losses, tier10Losses] }
+                ],
+                colors: ['#10B981', '#EF4444'],
+                plotOptions: {
+                    bar: {
+                        horizontal: false,
+                        columnWidth: '45%',
+                        borderRadius: 6
+                    }
+                },
+                grid: { borderColor: '#F2F4F7', strokeDashArray: 4 },
+                xaxis: {
+                    categories: ['Standard (1 Share)', 'Boosted (10 Shares)'],
+                    axisBorder: { show: false },
+                    axisTicks: { show: false }
+                },
+                yaxis: { labels: { formatter: val => Math.round(val) } },
+                legend: { position: 'top', horizontalAlign: 'right' }
+            };
+
+            const chartEl2 = document.querySelector("#crypto-dedicated-tier-chart");
+            if (chartEl2) {
+                if (cryptoDedicatedTierChartInstance) {
+                    cryptoDedicatedTierChartInstance.updateOptions(tierOptions);
+                } else {
+                    cryptoDedicatedTierChartInstance = new ApexCharts(chartEl2, tierOptions);
+                    cryptoDedicatedTierChartInstance.render();
+                }
+            }
+        }
+
         function renderAnalyticsCharts() {
+            renderCryptoDedicatedCharts();
             const closedTrades = allTrades.filter(t => t.status === 'closed').reverse();
             
             // Cumulative Profit Progression
