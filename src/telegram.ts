@@ -3,10 +3,12 @@ type TelegramBot = any; // fallback type
 const TelegramBot = (TelegramBotModule as any).default || TelegramBotModule;
 import logger from './logger';
 import { BotState, Trade } from './types';
+import { AIAnalystService } from './ai_analyst';
 
 export class TelegramService {
   private bot: TelegramBot;
   private whitelist: number;
+  private aiAnalyst: AIAnalystService;
 
   constructor(
     token: string, 
@@ -28,6 +30,7 @@ export class TelegramService {
       }
     });
     this.whitelist = parseInt(whitelistId);
+    this.aiAnalyst = new AIAnalystService();
     this.setupCommands();
     
     this.bot.on('polling_error', (error) => {
@@ -38,7 +41,7 @@ export class TelegramService {
       logger.error('Telegram general error:', error);
     });
     
-    logger.info('Telegram Bot initialized');
+    logger.info('Telegram Bot initialized with AI Analyst integration');
   }
 
   private setupCommands() {
@@ -46,6 +49,7 @@ export class TelegramService {
       reply_markup: {
         keyboard: [
           [{ text: '/start' }, { text: '/status' }],
+          [{ text: '/ai' }, { text: '/aiinsights' }],
           [{ text: '/snipes on' }, { text: '/snipes off' }],
           [{ text: '/paper on' }, { text: '/paper off' }],
           [{ text: '/markets' }, { text: '/recent' }],
@@ -311,10 +315,64 @@ export class TelegramService {
             await this.bot.sendMessage(msg.chat.id, `❌ Error: ${error.message}`);
         }
     });
+    this.bot.onText(/\/aiinsights/, async (msg) => {
+      if (!this.checkWhitelist(msg)) return;
+      this.bot.sendChatAction(msg.chat.id, 'typing');
+      
+      const history = this.paperTrader ? this.paperTrader.getHistory(30) : [];
+      const aiResponse = await this.aiAnalyst.generateTradeInsight(history);
+      this.bot.sendMessage(msg.chat.id, `🤖 *AI Trade Performance Insights*\n\n${aiResponse}`, { parse_mode: 'Markdown', ...mainKeyboard });
+    });
+
+    this.bot.onText(/\/(ai|ask)(?:\s+(.*))?/, async (msg, match) => {
+      if (!this.checkWhitelist(msg)) return;
+      const userPrompt = match![2]?.trim();
+
+      if (!userPrompt) {
+        this.bot.sendMessage(
+          msg.chat.id,
+          `🤖 *AI Market Analyst*\n\n` +
+          `You can chat directly with your read-only AI Analyst using OpenRouter!\n\n` +
+          `*Usage:* Type \`/ask <your question>\` or simply send any text message.\n\n` +
+          `*Examples:*\n` +
+          `• \`/ask Why did my last BTC trade win or lose?\` \n` +
+          `• \`/ask Analyze my win rate across past 20 paper trades\`\n` +
+          `• \`/ask Is the market currently trending UP or DOWN?\``,
+          { parse_mode: 'Markdown', ...mainKeyboard }
+        );
+        return;
+      }
+
+      this.bot.sendChatAction(msg.chat.id, 'typing');
+      const history = this.paperTrader ? this.paperTrader.getHistory(30) : [];
+      const markets = await this.getMarkets();
+      const aiResponse = await this.aiAnalyst.askAnalyst(userPrompt, history, markets?.[0] || null);
+
+      this.bot.sendMessage(msg.chat.id, `🤖 *AI Analyst Response*\n\n${aiResponse}`, { parse_mode: 'Markdown', ...mainKeyboard });
+    });
+
+    // Conversational Fallback: Any regular text message sent by authorized user will be answered by AI Analyst
+    this.bot.on('message', async (msg: any) => {
+      if (!this.checkWhitelist(msg)) return;
+      const text = msg.text?.trim();
+
+      // Skip slash commands
+      if (!text || text.startsWith('/')) return;
+
+      this.bot.sendChatAction(msg.chat.id, 'typing');
+      const history = this.paperTrader ? this.paperTrader.getHistory(30) : [];
+      const markets = await this.getMarkets();
+      const aiResponse = await this.aiAnalyst.askAnalyst(text, history, markets?.[0] || null);
+
+      this.bot.sendMessage(msg.chat.id, `🤖 *AI Analyst Response*\n\n${aiResponse}`, { parse_mode: 'Markdown', ...mainKeyboard });
+    });
+
     this.bot.onText(/\/help/, (msg) => {
       if (!this.checkWhitelist(msg)) return;
       const help = `🛠 *Available Commands*\n\n` +
         `/start - Bot status & menu\n` +
+        `/ask {question} - Chat with AI Market Analyst\n` +
+        `/aiinsights - Generate AI performance insights\n` +
         `/snipes on - Start sniping\n` +
         `/snipes off - Stop sniping\n` +
         `/status - Detailed performance\n` +
