@@ -119,9 +119,9 @@ async function bootstrap() {
           // Keep sniper strategy config in sync with dynamic paper mode toggle
           const { initSniper } = require('./src/strategies/sniper');
           initSniper({
-            paperMode: paperMode,
+            getPaperMode: () => state.paperMode,
             paperTrader: paperTrader,
-            polymarketService: polymarket,
+            getPolymarketService: () => polymarket,
             telegramService: telegram,
             tradingLimit: parseFloat(TRADING_LIMIT_PER_TRADE),
             maxDailyTrades: parseInt(MAX_DAILY_TRADES)
@@ -175,9 +175,9 @@ async function bootstrap() {
   
   // Initialize sniper module
   initSniper({
-    paperMode: state.paperMode,
+    getPaperMode: () => state.paperMode,
     paperTrader,
-    polymarketService: polymarket,
+    getPolymarketService: () => polymarket,
     telegramService: telegram,
     tradingLimit: parseFloat(TRADING_LIMIT_PER_TRADE),
     maxDailyTrades: parseInt(MAX_DAILY_TRADES)

@@ -5,9 +5,9 @@ import { getPaperTrader } from '../paper_trader';
 import logger from '../logger';
 
 export interface SniperConfig {
-  paperMode: boolean;
+  getPaperMode: () => boolean;
   paperTrader: any; // The PaperTrader instance
-  polymarketService: any; // The PolymarketService instance
+  getPolymarketService: () => any; // The PolymarketService instance
   telegramService: any;
   tradingLimit: number;
   maxDailyTrades: number; // Configured via environment variable
@@ -370,7 +370,7 @@ async function executeSnipe(market: any, ticker: 'btc' | 'eth' | 'sol' | 'bnb', 
         console.log(`[Sniper] T-10s Position Size: ${shares} share (Price Gap $${priceGap.toFixed(4)} vs Min Guard $${minGap})`);
 
         // 5. Execute the trade
-        const isPaperMode = config?.paperMode ?? true;
+        const isPaperMode = config?.getPaperMode ? config.getPaperMode() : true;
         if (isPaperMode) {
             const paperTrader = await getPaperTrader();
             if (!paperTrader) {
@@ -400,11 +400,12 @@ async function executeSnipe(market: any, ticker: 'btc' | 'eth' | 'sol' | 'bnb', 
             }
         } else {
             // Live Trading!
-            if (!config?.polymarketService) {
+            const polymarketService = config?.getPolymarketService ? config.getPolymarketService() : null;
+            if (!polymarketService) {
                 return { success: false, error: 'Polymarket Service not initialized (check PROXY_ADDRESS and POLYGON_PRIVATE_KEY)' };
             }
             const cost = shares * entryPrice;
-            const result = await config.polymarketService.placeSnipe(market, side, entryPrice, cost);
+            const result = await polymarketService.placeSnipe(market, side, entryPrice, cost);
 
             if (result && result.success) {
                 return {
