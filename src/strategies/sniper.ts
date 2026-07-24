@@ -370,7 +370,8 @@ async function executeSnipe(market: any, ticker: 'btc' | 'eth' | 'sol' | 'bnb', 
         console.log(`[Sniper] T-10s Position Size: ${shares} share (Price Gap $${priceGap.toFixed(4)} vs Min Guard $${minGap})`);
 
         // 5. Execute the trade
-        if (config?.paperMode) {
+        const isPaperMode = config?.paperMode ?? true;
+        if (isPaperMode) {
             const paperTrader = await getPaperTrader();
             if (!paperTrader) {
                 return { success: false, error: 'Paper trader not initialized' };

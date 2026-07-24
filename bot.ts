@@ -96,7 +96,21 @@ async function bootstrap() {
           stopSniper();
         }
       },
-      (paperMode) => { state.paperMode = paperMode; },
+      (paperMode) => { 
+        state.paperMode = paperMode; 
+        if (paperTrader) {
+          // Keep sniper strategy config in sync with dynamic paper mode toggle
+          const { initSniper } = require('./src/strategies/sniper');
+          initSniper({
+            paperMode: paperMode,
+            paperTrader: paperTrader,
+            polymarketService: polymarket,
+            telegramService: telegram,
+            tradingLimit: parseFloat(TRADING_LIMIT_PER_TRADE),
+            maxDailyTrades: parseInt(MAX_DAILY_TRADES)
+          });
+        }
+      },
       () => state,
       async () => {
         if (state.paperMode) {
