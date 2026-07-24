@@ -230,8 +230,8 @@ export class PolymarketService {
 
       logger.info(`Live snipe order response: ${JSON.stringify(order)}`);
 
-      if (order && (order.errorMsg || order.success === false)) {
-        return { success: false, error: order.errorMsg || 'Order was rejected by Polymarket CLOB' };
+      if (order && (order.error || order.errorMsg || order.success === false)) {
+        return { success: false, error: order.error || order.errorMsg || 'Order was rejected by Polymarket CLOB' };
       }
 
       return {
