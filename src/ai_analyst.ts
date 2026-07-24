@@ -7,8 +7,8 @@ export class AIAnalystService {
 
   constructor(apiKey?: string, model?: string) {
     this.openRouterApiKey = apiKey || process.env.OPENROUTER_API_KEY || '';
-    // Default to popular free OpenRouter model (e.g. meta-llama/llama-3.3-70b-instruct:free or google/gemini-2.0-flash-exp:free)
-    this.model = model || process.env.OPENROUTER_MODEL || 'meta-llama/llama-3.3-70b-instruct:free';
+    // Default to active free OpenRouter model
+    this.model = model || process.env.OPENROUTER_MODEL || 'openai/gpt-oss-20b:free';
   }
 
   public isConfigured(): boolean {
