@@ -82,7 +82,17 @@ export class PolymarketService {
       // USDC uses 6 decimals
       const usdcEFormatted = parseFloat(require('ethers').utils.formatUnits(balUsdcE, 6));
       const nativeFormatted = parseFloat(require('ethers').utils.formatUnits(balNative, 6));
-      const totalUsdc = usdcEFormatted + nativeFormatted;
+      let totalUsdc = usdcEFormatted + nativeFormatted;
+
+      // Fallback: If RPC returned 0, query official Polymarket Gamma User Portfolio API
+      if (totalUsdc === 0 && targetAddress) {
+        try {
+          const gammaRes = await axios.get(`https://gamma-api.polymarket.com/users/${targetAddress.toLowerCase()}`);
+          if (gammaRes.data && (gammaRes.data.cash || gammaRes.data.portfolioValue)) {
+            totalUsdc = parseFloat(gammaRes.data.cash || gammaRes.data.portfolioValue || '0');
+          }
+        } catch (e) {}
+      }
 
       return { usdc: totalUsdc, shares: 0 };
     } catch (err) {
