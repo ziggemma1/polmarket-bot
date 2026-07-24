@@ -163,26 +163,29 @@ async function fetchSpotPrice(ticker: 'btc' | 'eth' | 'sol' | 'bnb'): Promise<nu
     const cgMap: { [key: string]: string } = { btc: 'bitcoin', eth: 'ethereum', sol: 'solana', bnb: 'binancecoin' };
     let priceValue = 0;
 
+    // 1. Primary: Use Binance Vision (matches exact market resolution candles)
     try {
-        const coinbaseResponse = await fetch(`https://api.coinbase.com/v2/prices/${ticker.toUpperCase()}-USD/spot`);
-        const coinbaseData = await coinbaseResponse.json();
-        priceValue = parseFloat(coinbaseData?.data?.amount);
+        const binanceResponse = await fetch(`https://data-api.binance.vision/api/v3/ticker/price?symbol=${ticker.toUpperCase()}USDT`);
+        const binanceData = await binanceResponse.json();
+        priceValue = parseFloat(binanceData?.price);
     } catch (e) {}
 
+    // 2. Secondary Fallback: Coinbase
+    if (!priceValue || isNaN(priceValue)) {
+        try {
+            const coinbaseResponse = await fetch(`https://api.coinbase.com/v2/prices/${ticker.toUpperCase()}-USD/spot`);
+            const coinbaseData = await coinbaseResponse.json();
+            priceValue = parseFloat(coinbaseData?.data?.amount);
+        } catch (e) {}
+    }
+
+    // 3. Tertiary Fallback: CoinGecko
     if (!priceValue || isNaN(priceValue)) {
         try {
             const cgId = cgMap[ticker] || ticker;
             const cgRes = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${cgId}&vs_currencies=usd`);
             const cgData = await cgRes.json();
             priceValue = parseFloat(cgData?.[cgId]?.usd);
-        } catch (e) {}
-    }
-
-    if (!priceValue || isNaN(priceValue)) {
-        try {
-            const binanceResponse = await fetch(`https://data-api.binance.vision/api/v3/ticker/price?symbol=${ticker.toUpperCase()}USDT`);
-            const binanceData = await binanceResponse.json();
-            priceValue = parseFloat(binanceData?.price);
         } catch (e) {}
     }
 
@@ -228,10 +231,10 @@ async function fetchStrikePrice(market: any, ticker: 'btc' | 'eth' | 'sol' | 'bn
 }
 
 const MIN_GAP_THRESHOLDS: { [key in 'btc' | 'eth' | 'sol' | 'bnb']: number } = {
-    btc: 0.00,
-    eth: 0.00,
-    sol: 0.00,
-    bnb: 0.00
+    btc: 15.00,
+    eth: 1.50,
+    sol: 0.15,
+    bnb: 0.30
 };
 
 const BOOST_GAP_THRESHOLDS: { [key in 'btc' | 'eth' | 'sol' | 'bnb']: number } = {
