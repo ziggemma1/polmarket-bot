@@ -22,8 +22,9 @@ export class PolymarketService {
         if (key.match(/^(0x)?[0-9a-fA-F]{64}$/)) {
           this.wallet = new Wallet(key);
           // Initialize base CLOB client with polygon chain ID (137) and wallet
-          const sigType = this.proxyAddress ? SignatureType.POLY_GNOSIS_SAFE : SignatureType.EOA;
-          this.client = new ClobClient('https://clob.polymarket.com', 137, this.wallet, undefined, sigType, this.proxyAddress || undefined);
+          const isProxy = this.proxyAddress && this.proxyAddress.toLowerCase() !== this.wallet.address.toLowerCase();
+          const sigType = isProxy ? SignatureType.POLY_GNOSIS_SAFE : SignatureType.EOA;
+          this.client = new ClobClient('https://clob.polymarket.com', 137, this.wallet, undefined, sigType, isProxy ? this.proxyAddress : undefined);
           logger.info('Polymarket trading client wallet attached successfully.');
         } else {
           logger.warn('Invalid private key format provided. PolymarketService running in discovery mode.');
@@ -211,8 +212,9 @@ export class PolymarketService {
         const apiCreds = await this.client.createOrDeriveApiKey();
         if (apiCreds && apiCreds.key) {
           // Re-instantiate ClobClient with Level-2 API credentials attached
-          const sigType = this.proxyAddress ? SignatureType.POLY_GNOSIS_SAFE : SignatureType.EOA;
-          this.client = new ClobClient('https://clob.polymarket.com', 137, this.wallet, apiCreds, sigType, this.proxyAddress || undefined);
+          const isProxy = this.proxyAddress && this.proxyAddress.toLowerCase() !== this.wallet?.address.toLowerCase();
+          const sigType = isProxy ? SignatureType.POLY_GNOSIS_SAFE : SignatureType.EOA;
+          this.client = new ClobClient('https://clob.polymarket.com', 137, this.wallet, apiCreds, sigType, isProxy ? this.proxyAddress : undefined);
         }
       } catch (e: any) {
         logger.warn('Failed to derive CLOB API credentials:', e?.message || e);
