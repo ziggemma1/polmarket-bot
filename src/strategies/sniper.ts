@@ -401,12 +401,12 @@ async function executeSnipe(market: any, ticker: 'btc' | 'eth' | 'sol' | 'bnb', 
         } else {
             // Live Trading!
             if (!config?.polymarketService) {
-                return { success: false, error: 'Polymarket Service not initialized for Live mode' };
+                return { success: false, error: 'Polymarket Service not initialized (check PROXY_ADDRESS and POLYGON_PRIVATE_KEY)' };
             }
             const cost = shares * entryPrice;
             const result = await config.polymarketService.placeSnipe(market, side, entryPrice, cost);
 
-            if (result) {
+            if (result && result.success) {
                 return {
                     success: true,
                     side: side,
@@ -415,7 +415,7 @@ async function executeSnipe(market: any, ticker: 'btc' | 'eth' | 'sol' | 'bnb', 
                     priceValue: priceValue,
                 };
             } else {
-                return { success: false, error: 'Live trade placement failed' };
+                return { success: false, error: result?.error || 'Live trade placement failed' };
             }
         }
 

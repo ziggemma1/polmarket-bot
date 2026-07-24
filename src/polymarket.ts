@@ -21,6 +21,7 @@ export class PolymarketService {
         
         if (key.match(/^(0x)?[0-9a-fA-F]{64}$/)) {
           this.wallet = new Wallet(key);
+          // Initialize CLOB client with polygon chain ID (137) and proxy wallet
           this.client = new ClobClient('https://clob.polymarket.com', 137, this.wallet);
           logger.info('Polymarket trading client initialized successfully.');
         } else {
@@ -195,33 +196,50 @@ export class PolymarketService {
     }
   }
 
-  async placeSnipe(market: MarketMetadata, side: 'YES' | 'NO', price: number, size: number): Promise<Trade | null> {
-    if (!this.client) return null;
+  async placeSnipe(market: MarketMetadata, side: 'YES' | 'NO', price: number, size: number): Promise<{ success: boolean; trade?: Trade; error?: string }> {
+    if (!this.client) return { success: false, error: 'CLOB Client not initialized (Missing Private Key)' };
 
     try {
       const tokenId = side === 'YES' ? market.yesTokenId : market.noTokenId;
+      if (!tokenId) {
+        return { success: false, error: `Missing token ID for outcome ${side}` };
+      }
+
+      // Ensure L2 API Credentials exist / are derived for the wallet
+      try {
+        const apiCreds = await this.client.createOrDeriveApiKey();
+        if (apiCreds) {
+          this.client.updateApiKey(apiCreds);
+        }
+      } catch (e: any) {
+        logger.warn('Failed to derive CLOB API key, attempting order with existing headers:', e?.message || e);
+      }
       
-      const order = await this.client.createOrder({
+      const order = await this.client.createAndPostOrder({
         tokenID: tokenId,
         price: price,
         side: Side.BUY,
-        size: Math.floor(size / price), // Amount of shares
+        size: Math.max(1, Math.floor(size / price)), // Amount of shares
       } as any);
 
-      logger.info(`Snipe order placed: ${order.orderID || 'pending'}`);
+      logger.info(`Live snipe order placed: ${JSON.stringify(order)}`);
 
       return {
-        timestamp: new Date().toISOString(),
-        marketId: market.id,
-        side,
-        entryPrice: price,
-        btcPrice: 0, // Will be filled by caller
-        amount: size,
-        status: 'FILLED'
+        success: true,
+        trade: {
+          timestamp: new Date().toISOString(),
+          marketId: market.id,
+          side,
+          entryPrice: price,
+          btcPrice: 0,
+          amount: size,
+          status: 'FILLED'
+        }
       };
-    } catch (err) {
-      logger.error('Snipe execution failed:', err);
-      return null;
+    } catch (err: any) {
+      const errorMsg = err?.response?.data?.error || err?.message || String(err);
+      logger.error('Live snipe order execution failed:', errorMsg);
+      return { success: false, error: errorMsg };
     }
   }
 
