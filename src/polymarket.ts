@@ -36,10 +36,34 @@ export class PolymarketService {
 
   async getBalance(): Promise<{ usdc: number; shares: number }> {
     try {
-      // In a real app, you'd use client.getBalance or similar
-      // For this implementation, we'll return mock or simplified balance
-      // since the specific balance API can vary by SDK version
-      return { usdc: 100.50, shares: 0 };
+      const targetAddress = this.proxyAddress || this.wallet?.address;
+      if (!targetAddress) {
+        return { usdc: 0, shares: 0 };
+      }
+
+      // Query USDC (Polygon Native USDC / bridged USDC) balance via Polygon public RPC
+      // Native USDC on Polygon: 0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359
+      // USDC.e (Bridged USDC): 0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174
+      const usdcEAddress = '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174';
+      const nativeUsdcAddress = '0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359';
+
+      const usdcAbi = ['function balanceOf(address owner) view returns (uint256)'];
+      const provider = new (require('ethers').providers.JsonRpcProvider)('https://polygon-rpc.com');
+
+      const contractUsdcE = new (require('ethers').Contract)(usdcEAddress, usdcAbi, provider);
+      const contractNativeUsdc = new (require('ethers').Contract)(nativeUsdcAddress, usdcAbi, provider);
+
+      const [balUsdcE, balNative] = await Promise.all([
+        contractUsdcE.balanceOf(targetAddress).catch(() => 0),
+        contractNativeUsdc.balanceOf(targetAddress).catch(() => 0)
+      ]);
+
+      // USDC uses 6 decimals
+      const usdcEFormatted = parseFloat(require('ethers').utils.formatUnits(balUsdcE, 6));
+      const nativeFormatted = parseFloat(require('ethers').utils.formatUnits(balNative, 6));
+      const totalUsdc = usdcEFormatted + nativeFormatted;
+
+      return { usdc: totalUsdc, shares: 0 };
     } catch (err) {
       logger.error('Error fetching balance:', err);
       return { usdc: 0, shares: 0 };
