@@ -48,15 +48,36 @@ export class PolymarketService {
       const nativeUsdcAddress = '0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359';
 
       const usdcAbi = ['function balanceOf(address owner) view returns (uint256)'];
-      const provider = new (require('ethers').providers.JsonRpcProvider)('https://polygon-rpc.com');
+      const rpcUrls = [
+        'https://polygon-rpc.com',
+        'https://rpc-mainnet.maticvigil.com',
+        'https://polygon-bor-rpc.publicnode.com',
+        'https://1rpc.io/matter/polygon'
+      ];
 
-      const contractUsdcE = new (require('ethers').Contract)(usdcEAddress, usdcAbi, provider);
-      const contractNativeUsdc = new (require('ethers').Contract)(nativeUsdcAddress, usdcAbi, provider);
+      let balUsdcE = '0';
+      let balNative = '0';
 
-      const [balUsdcE, balNative] = await Promise.all([
-        contractUsdcE.balanceOf(targetAddress).catch(() => 0),
-        contractNativeUsdc.balanceOf(targetAddress).catch(() => 0)
-      ]);
+      for (const rpcUrl of rpcUrls) {
+        try {
+          const provider = new (require('ethers').providers.JsonRpcProvider)(rpcUrl);
+          const contractUsdcE = new (require('ethers').Contract)(usdcEAddress, usdcAbi, provider);
+          const contractNativeUsdc = new (require('ethers').Contract)(nativeUsdcAddress, usdcAbi, provider);
+
+          const [b1, b2] = await Promise.all([
+            contractUsdcE.balanceOf(targetAddress),
+            contractNativeUsdc.balanceOf(targetAddress)
+          ]);
+
+          balUsdcE = b1.toString();
+          balNative = b2.toString();
+          if (b1.gt(0) || b2.gt(0)) {
+            break; // Found balance successfully
+          }
+        } catch (e) {
+          // Try next RPC provider
+        }
+      }
 
       // USDC uses 6 decimals
       const usdcEFormatted = parseFloat(require('ethers').utils.formatUnits(balUsdcE, 6));
