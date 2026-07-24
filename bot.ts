@@ -65,16 +65,20 @@ async function bootstrap() {
 
   paperTrader = await getPaperTrader();
 
-  if (PROXY_ADDRESS) {
+  const privateKey = process.env.POLYGON_PRIVATE_KEY?.trim() || POLYGON_PRIVATE_KEY?.trim();
+  const proxyAddress = process.env.PROXY_ADDRESS?.trim() || PROXY_ADDRESS?.trim();
+
+  if (proxyAddress) {
     try {
-      const sanitizedKey = POLYGON_PRIVATE_KEY?.trim();
-      const isValidKey = sanitizedKey && sanitizedKey.match(/^(0x)?[0-9a-fA-F]{64}$/);
+      const isValidKey = privateKey && privateKey.match(/^(0x)?[0-9a-fA-F]{64}$/);
       
-      if (!isValidKey && !state.paperMode) {
-        logger.warn(`Invalid private key format (length: ${sanitizedKey?.length || 0}). Live trading will be disabled.`);
+      if (!isValidKey) {
+        logger.warn(`Invalid or missing private key format (length: ${privateKey?.length || 0}). Live trading will be disabled.`);
+      } else {
+        logger.info(`Initializing Polymarket Live Trading Service for proxy: ${proxyAddress.slice(0, 6)}...`);
       }
       
-      polymarket = new PolymarketService(sanitizedKey, PROXY_ADDRESS);
+      polymarket = new PolymarketService(privateKey, proxyAddress);
     } catch (err: any) {
       initError = `Polymarket initialization failed: ${err.message}`;
       logger.error(initError);
