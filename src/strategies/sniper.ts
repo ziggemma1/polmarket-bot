@@ -77,18 +77,27 @@ async function settleExpiredPositions() {
                     const outcomePrices = typeof polyMarket.outcomePrices === 'string' 
                         ? JSON.parse(polyMarket.outcomePrices) 
                         : polyMarket.outcomePrices;
-                    const yesWon = parseFloat(outcomePrices[0] || '0') > 0.5;
-                    const noWon = parseFloat(outcomePrices[1] || '0') > 0.5;
+                    
+                    const price0 = parseFloat(outcomePrices[0] || '0');
+                    const price1 = parseFloat(outcomePrices[1] || '0');
 
-                    if ((position.side === 'YES' && yesWon) || (position.side === 'NO' && noWon)) {
-                        exitPrice = 1.00;
-                        outcome = '🟢 WIN';
+                    // ONLY set resolvedViaPolymarket = true IF Polymarket has fully finalized resolution (one outcome price > 0.9)
+                    if (price0 > 0.9 || price1 > 0.9) {
+                        const yesWon = price0 > 0.9;
+                        const noWon = price1 > 0.9;
+
+                        if ((position.side === 'YES' && yesWon) || (position.side === 'NO' && noWon)) {
+                            exitPrice = 1.00;
+                            outcome = '🟢 WIN';
+                        } else {
+                            exitPrice = 0.00;
+                            outcome = '🔴 LOSS';
+                        }
+                        resolvedViaPolymarket = true;
+                        console.log(`[Sniper] Resolved position ${position.id} via official Polymarket API: ${outcome} (prices: [${price0}, ${price1}])`);
                     } else {
-                        exitPrice = 0.00;
-                        outcome = '🔴 LOSS';
+                        console.log(`[Sniper] Polymarket closed but prices not finalized yet ([${price0}, ${price1}]). Falling back to Binance 5m Candle...`);
                     }
-                    resolvedViaPolymarket = true;
-                    console.log(`[Sniper] Resolved position ${position.id} via official Polymarket API: ${outcome}`);
                 }
             } catch (err) {}
 
