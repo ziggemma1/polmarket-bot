@@ -49,12 +49,13 @@ export class TelegramService {
       reply_markup: {
         keyboard: [
           [{ text: '/start' }, { text: '/status' }],
-          [{ text: '/ai' }, { text: '/aiinsights' }],
+          [{ text: '/balance' }, { text: '/paper balance' }],
+          [{ text: '/paper off confirm' }, { text: '/paper on' }],
           [{ text: '/snipes on' }, { text: '/snipes off' }],
-          [{ text: '/paper on' }, { text: '/paper off' }],
+          [{ text: '/ai' }, { text: '/aiinsights' }],
           [{ text: '/markets' }, { text: '/recent' }],
-          [{ text: '/close all' }, { text: '/paper balance' }],
-          [{ text: '/resetbalance' }, { text: '/help' }]
+          [{ text: '/close all' }, { text: '/resetbalance' }],
+          [{ text: '/help' }]
         ],
         resize_keyboard: true,
         one_time_keyboard: false
