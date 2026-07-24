@@ -224,7 +224,11 @@ export class PolymarketService {
         size: Math.max(1, Math.floor(size / price)), // Amount of shares
       } as any);
 
-      logger.info(`Live snipe order placed: ${JSON.stringify(order)}`);
+      logger.info(`Live snipe order response: ${JSON.stringify(order)}`);
+
+      if (order && (order.errorMsg || order.success === false)) {
+        return { success: false, error: order.errorMsg || 'Order was rejected by Polymarket CLOB' };
+      }
 
       return {
         success: true,

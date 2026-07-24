@@ -166,7 +166,7 @@ async function tick() {
                     
                     if (config?.telegramService) {
                         config.telegramService.sendAlert(
-                            `📄 PAPER: Snipe Executed\n` +
+                            `✅ LIVE: Snipe Executed\n` +
                             `Market: ${market.question}\n` +
                             `Side: ${result.side}\n` +
                             `Price: $${result.price}\n` +
