@@ -21,11 +21,11 @@ export class PolymarketService {
         
         if (key.match(/^(0x)?[0-9a-fA-F]{64}$/)) {
           this.wallet = new Wallet(key);
-          // Initialize CLOB client with polygon chain ID (137) and proxy wallet
+          // Initialize base CLOB client with polygon chain ID (137) and wallet
           this.client = new ClobClient('https://clob.polymarket.com', 137, this.wallet);
-          logger.info('Polymarket trading client initialized successfully.');
+          logger.info('Polymarket trading client wallet attached successfully.');
         } else {
-          logger.warn('Invalid private key provided. PolymarketService will run in discovery-only mode.');
+          logger.warn('Invalid private key format provided. PolymarketService running in discovery mode.');
         }
       } catch (err) {
         logger.error('Failed to initialize Polymarket wallet:', err);
@@ -197,7 +197,7 @@ export class PolymarketService {
   }
 
   async placeSnipe(market: MarketMetadata, side: 'YES' | 'NO', price: number, size: number): Promise<{ success: boolean; trade?: Trade; error?: string }> {
-    if (!this.client) return { success: false, error: 'CLOB Client not initialized (Missing Private Key)' };
+    if (!this.client || !this.wallet) return { success: false, error: 'CLOB Client not initialized (Missing Private Key)' };
 
     try {
       const tokenId = side === 'YES' ? market.yesTokenId : market.noTokenId;
@@ -205,16 +205,18 @@ export class PolymarketService {
         return { success: false, error: `Missing token ID for outcome ${side}` };
       }
 
-      // Ensure L2 API Credentials exist / are derived for the wallet
+      // 1. Deriving Level-2 API Credentials from Ethers Wallet Signature
       try {
         const apiCreds = await this.client.createOrDeriveApiKey();
-        if (apiCreds) {
-          this.client.updateApiKey(apiCreds);
+        if (apiCreds && apiCreds.key) {
+          // Re-instantiate ClobClient with Level-2 API credentials attached
+          this.client = new ClobClient('https://clob.polymarket.com', 137, this.wallet, apiCreds);
         }
       } catch (e: any) {
-        logger.warn('Failed to derive CLOB API key, attempting order with existing headers:', e?.message || e);
+        logger.warn('Failed to derive CLOB API credentials:', e?.message || e);
       }
       
+      // 2. Post order with Level-2 credentials attached
       const order = await this.client.createAndPostOrder({
         tokenID: tokenId,
         price: price,

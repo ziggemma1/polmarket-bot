@@ -102,6 +102,19 @@ async function bootstrap() {
       },
       (paperMode) => { 
         state.paperMode = paperMode; 
+        
+        // Lazy initialize PolymarketService if it wasn't initialized at boot
+        if (!polymarket && process.env.PROXY_ADDRESS && process.env.POLYGON_PRIVATE_KEY) {
+          try {
+            const pk = process.env.POLYGON_PRIVATE_KEY.trim();
+            const pa = process.env.PROXY_ADDRESS.trim();
+            polymarket = new PolymarketService(pk, pa);
+            logger.info('Lazy initialized PolymarketService for Live Trading.');
+          } catch (e: any) {
+            logger.error('Failed to lazy initialize PolymarketService:', e.message);
+          }
+        }
+
         if (paperTrader) {
           // Keep sniper strategy config in sync with dynamic paper mode toggle
           const { initSniper } = require('./src/strategies/sniper');
@@ -161,16 +174,14 @@ async function bootstrap() {
   setTimeout(backgroundLoop, 5000);
   
   // Initialize sniper module
-  if (polymarket && telegram) {
-    initSniper({
-      paperMode: state.paperMode,
-      paperTrader,
-      polymarketService: polymarket,
-      telegramService: telegram,
-      tradingLimit: parseFloat(TRADING_LIMIT_PER_TRADE),
-      maxDailyTrades: parseInt(MAX_DAILY_TRADES)
-    });
-  }
+  initSniper({
+    paperMode: state.paperMode,
+    paperTrader,
+    polymarketService: polymarket,
+    telegramService: telegram,
+    tradingLimit: parseFloat(TRADING_LIMIT_PER_TRADE),
+    maxDailyTrades: parseInt(MAX_DAILY_TRADES)
+  });
 }
 
 bootstrap().catch(err => {
