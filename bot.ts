@@ -7,7 +7,6 @@ import logger from './src/logger';
 import { PolymarketService } from './src/polymarket';
 import { TelegramService } from './src/telegram';
 import { BotState, Trade } from './src/types';
-import { getPaperTrader } from './src/paper_trader';
 import { getUpcomingBTCMarkets } from './src/polymarket/scanner';
 import { initSniper, startSniper, stopSniper } from './src/strategies/sniper';
 
@@ -29,14 +28,11 @@ const {
   TELEGRAM_USER_ID,
   TRADING_LIMIT_PER_TRADE = '1.00',
   MAX_DAILY_TRADES = '500000',
-  PAPER_MODE = 'true',
-  PAPER_INITIAL_BALANCE = '10000',
 } = process.env;
 
 // --- State ---
 const state: BotState = {
   enabled: false,
-  paperMode: PAPER_MODE === 'true',
   totalTradesToday: 0,
   winRate: 0,
   pnlToday: 0,
@@ -47,7 +43,6 @@ const state: BotState = {
 let polymarket: PolymarketService | null = null;
 let telegram: TelegramService | null = null;
 let initError: string | null = null;
-let paperTrader: any = null;
 
 async function bootstrap() {
   const dbUrl = process.env.DATABASE_URL;
@@ -63,7 +58,6 @@ async function bootstrap() {
     logger.warn('DATABASE_URL is missing in environment variables. Running without MongoDB.');
   }
 
-  paperTrader = await getPaperTrader();
 
   const privateKey = process.env.POLYGON_PRIVATE_KEY?.trim() || POLYGON_PRIVATE_KEY?.trim();
   const proxyAddress = process.env.PROXY_ADDRESS?.trim() || PROXY_ADDRESS?.trim();
@@ -100,40 +94,8 @@ async function bootstrap() {
           stopSniper();
         }
       },
-      (paperMode) => { 
-        state.paperMode = paperMode; 
-        
-        // Lazy initialize PolymarketService if it wasn't initialized at boot
-        if (!polymarket && process.env.PROXY_ADDRESS && process.env.POLYGON_PRIVATE_KEY) {
-          try {
-            const pk = process.env.POLYGON_PRIVATE_KEY.trim();
-            const pa = process.env.PROXY_ADDRESS.trim();
-            polymarket = new PolymarketService(pk, pa);
-            logger.info('Lazy initialized PolymarketService for Live Trading.');
-          } catch (e: any) {
-            logger.error('Failed to lazy initialize PolymarketService:', e.message);
-          }
-        }
-
-        if (paperTrader) {
-          // Keep sniper strategy config in sync with dynamic paper mode toggle
-          const { initSniper } = require('./src/strategies/sniper');
-          initSniper({
-            getPaperMode: () => state.paperMode,
-            paperTrader: paperTrader,
-            getPolymarketService: () => polymarket,
-            telegramService: telegram,
-            tradingLimit: parseFloat(TRADING_LIMIT_PER_TRADE),
-            maxDailyTrades: parseInt(MAX_DAILY_TRADES)
-          });
-        }
-      },
       () => ({ ...state, polymarket }),
       async () => {
-        if (state.paperMode) {
-          const stats = paperTrader.getStats();
-          return { usdc: stats.balance, shares: stats.openPositions };
-        }
         if (polymarket) return await polymarket.getBalance();
         return { usdc: 0, shares: 0 };
       },
@@ -142,8 +104,7 @@ async function bootstrap() {
           return await getUpcomingBTCMarkets();
         }
         return [];
-      },
-      paperTrader
+      }
     );
   } else {
     logger.warn('⚠️ TELEGRAM_BOT_TOKEN or TELEGRAM_USER_ID is missing in environment variables. Telegram Service and Sniper loop will not start.');
@@ -155,8 +116,7 @@ async function bootstrap() {
   
     try {
       // Check daily limit
-      const currentTradesToday = state.paperMode ? paperTrader.getStats().tradesToday : state.totalTradesToday;
-      if (currentTradesToday >= parseInt(MAX_DAILY_TRADES)) {
+      if (state.totalTradesToday >= parseInt(MAX_DAILY_TRADES)) {
         if (state.enabled) {
           state.enabled = false;
           stopSniper();
@@ -173,10 +133,7 @@ async function bootstrap() {
   // Start the loop
   setTimeout(backgroundLoop, 5000);
   
-  // Initialize sniper module
   initSniper({
-    getPaperMode: () => state.paperMode,
-    paperTrader,
     getPolymarketService: () => polymarket,
     telegramService: telegram,
     tradingLimit: parseFloat(TRADING_LIMIT_PER_TRADE),
@@ -196,199 +153,12 @@ app.get('/health', (req, res) => {
   res.status(200).send('✅ Bot is awake and running!');
 });
 
-app.get('/api/trades', (req, res) => {
-  try {
-    if (paperTrader) {
-      res.json(paperTrader.getRecentTrades(100));
-    } else {
-      res.json([]);
-    }
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.get('/api/stats', (req, res) => {
-  try {
-    if (paperTrader) {
-      const stats = paperTrader.getStats();
-      const recent = paperTrader.getRecentTrades(100);
-      
-      const closed = recent.filter((t: any) => t.status === 'closed');
-      const wins = closed.filter((t: any) => t.pnl > 0).length;
-      const losses = closed.filter((t: any) => t.pnl <= 0).length;
-      
-      const yesTrades = recent.filter((t: any) => t.side === 'YES').length;
-      const noTrades = recent.filter((t: any) => t.side === 'NO').length;
-      
-      const avgPnL = closed.length > 0 ? stats.totalPnL / closed.length : 0;
-      
-      let topMarket = 'N/A';
-      let bestTrade = 0;
-      let worstTrade = 0;
-      let totalShares = 0;
-      
-      if (recent.length > 0) {
-        const marketCounts: { [key: string]: number } = {};
-        recent.forEach((t: any) => {
-          marketCounts[t.question] = (marketCounts[t.question] || 0) + 1;
-          if (t.status === 'closed') {
-            if (t.pnl > bestTrade) bestTrade = t.pnl;
-            if (t.pnl < worstTrade) worstTrade = t.pnl;
-          }
-          totalShares += t.shares || 0;
-        });
-        
-        let maxCount = 0;
-        for (const m in marketCounts) {
-          if (marketCounts[m] > maxCount) {
-            maxCount = marketCounts[m];
-            topMarket = m;
-          }
-        }
-      }
-      
-      const avgTradeSize = recent.length > 0 ? totalShares / recent.length : 0;
-      
-      // Calculate average wins before a loss (average win streak length)
-      let winStreaks: number[] = [];
-      let currentStreak = 0;
-      const chronoClosed = [...closed].sort((a: any, b: any) => new Date(a.entry_time).getTime() - new Date(b.entry_time).getTime());
-      
-      chronoClosed.forEach((t: any) => {
-        if (t.pnl > 0) {
-          currentStreak++;
-        } else if (t.pnl < 0) {
-          if (currentStreak > 0) {
-            winStreaks.push(currentStreak);
-            currentStreak = 0;
-          }
-        }
-      });
-      if (currentStreak > 0) {
-        winStreaks.push(currentStreak);
-      }
-      const avgWinStreak = winStreaks.length > 0 ? winStreaks.reduce((a, b) => a + b, 0) / winStreaks.length : 0;
-      
-      // Calculate comprehensive crypto analysis per asset including share size tiers
-      const cryptoAnalysis: {
-          [key: string]: {
-              totalPnL: number;
-              wins: number;
-              losses: number;
-              totalTrades: number;
-              winRate: number;
-              tier1: { trades: number; wins: number; losses: number; pnl: number; winRate: number };
-              tier10: { trades: number; wins: number; losses: number; pnl: number; winRate: number };
-          }
-      } = {
-          btc: { totalPnL: 0, wins: 0, losses: 0, totalTrades: 0, winRate: 0, tier1: { trades: 0, wins: 0, losses: 0, pnl: 0, winRate: 0 }, tier10: { trades: 0, wins: 0, losses: 0, pnl: 0, winRate: 0 } },
-          eth: { totalPnL: 0, wins: 0, losses: 0, totalTrades: 0, winRate: 0, tier1: { trades: 0, wins: 0, losses: 0, pnl: 0, winRate: 0 }, tier10: { trades: 0, wins: 0, losses: 0, pnl: 0, winRate: 0 } },
-          sol: { totalPnL: 0, wins: 0, losses: 0, totalTrades: 0, winRate: 0, tier1: { trades: 0, wins: 0, losses: 0, pnl: 0, winRate: 0 }, tier10: { trades: 0, wins: 0, losses: 0, pnl: 0, winRate: 0 } },
-          bnb: { totalPnL: 0, wins: 0, losses: 0, totalTrades: 0, winRate: 0, tier1: { trades: 0, wins: 0, losses: 0, pnl: 0, winRate: 0 }, tier10: { trades: 0, wins: 0, losses: 0, pnl: 0, winRate: 0 } }
-      };
-
-      closed.forEach((t: any) => {
-          const q = (t.question || '').toLowerCase();
-          let asset: 'btc' | 'eth' | 'sol' | 'bnb' | null = null;
-          if (q.includes('bitcoin') || q.includes('btc')) asset = 'btc';
-          else if (q.includes('ethereum') || q.includes('eth')) asset = 'eth';
-          else if (q.includes('solana') || q.includes('sol')) asset = 'sol';
-          else if (q.includes('bnb') || q.includes('binance')) asset = 'bnb';
-
-          if (asset) {
-              const ca = cryptoAnalysis[asset];
-              const pnl = t.pnl || 0;
-              const isWin = pnl > 0;
-              const isBoosted = (t.shares || 1) >= 10;
-
-              ca.totalPnL += pnl;
-              ca.totalTrades++;
-              if (isWin) ca.wins++; else ca.losses++;
-
-              const tier = isBoosted ? ca.tier10 : ca.tier1;
-              tier.trades++;
-              tier.pnl += pnl;
-              if (isWin) tier.wins++; else tier.losses++;
-          }
-      });
-
-      // Calculate win rates
-      Object.keys(cryptoAnalysis).forEach(k => {
-          const ca = cryptoAnalysis[k];
-          ca.winRate = ca.totalTrades > 0 ? (ca.wins / ca.totalTrades) * 100 : 0;
-          ca.tier1.winRate = ca.tier1.trades > 0 ? (ca.tier1.wins / ca.tier1.trades) * 100 : 0;
-          ca.tier10.winRate = ca.tier10.trades > 0 ? (ca.tier10.wins / ca.tier10.trades) * 100 : 0;
-      });
-
-      const pnlByCrypto: { [key: string]: number } = {
-          btc: cryptoAnalysis.btc.totalPnL,
-          eth: cryptoAnalysis.eth.totalPnL,
-          sol: cryptoAnalysis.sol.totalPnL,
-          bnb: cryptoAnalysis.bnb.totalPnL
-      };
-
-      res.json({
-        ...stats,
-        winLossDist: { wins, losses },
-        sideDist: { yes: yesTrades, no: noTrades },
-        avgPnL,
-        topMarket,
-        bestTrade,
-        worstTrade,
-        avgTradeSize,
-        avgWinStreak,
-        pnlByCrypto,
-        cryptoAnalysis
-      });
-    } else {
-      res.status(500).json({ error: 'Paper trader not initialized' });
-    }
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.post('/api/reset', async (req, res) => {
-  try {
-    if (paperTrader) {
-      await paperTrader.reset();
-      res.json({ success: true, message: 'Paper trading balance reset to $10,000' });
-    } else {
-      res.status(400).json({ success: false, error: 'Paper trader not initialized' });
-    }
-  } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-app.get('/api/reset', async (req, res) => {
-  try {
-    if (paperTrader) {
-      await paperTrader.reset();
-      res.json({ success: true, message: 'Paper trading balance reset to $10,000' });
-    } else {
-      res.status(400).json({ success: false, error: 'Paper trader not initialized' });
-    }
-  } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
 app.get('/status', async (req, res) => {
   try {
-    let paperStats = { balance: 0, totalTrades: 0, winRate: 0, totalPnL: 0 };
-    if (paperTrader) {
-      paperStats = paperTrader.getStats();
-    }
-    
-    // Using simple snippet for getSniperStatus if not fully exported with correct types, but it is exported.
     res.status(200).json({
       status: 'online',
       time: new Date().toISOString(),
       botEnabled: state.enabled,
-      paperMode: state.paperMode,
-      paperTrading: paperStats,
       liveTrading: {
         tradesToday: state.totalTradesToday,
         pnlToday: state.pnlToday
@@ -411,4 +181,3 @@ const server = app.listen(PORT, '0.0.0.0', () => {
 server.on('error', (err) => {
   logger.error('Express server error:', err);
 });
-// UI Sync

@@ -1,12 +1,11 @@
 import { getCurrentMarket } from '../polymarket/scanner';
-import { getPaperTrader } from '../paper_trader';
+
 
 // Use config pattern from previous file to support bot.ts injecting telegram 
 import logger from '../logger';
 
 export interface SniperConfig {
   getPaperMode: () => boolean;
-  paperTrader: any; // The PaperTrader instance
   getPolymarketService: () => any; // The PolymarketService instance
   telegramService: any;
   tradingLimit: number;
@@ -32,138 +31,6 @@ const CHECK_INTERVAL = 2000; // 2 seconds
 const SNIPE_WINDOW = 12; // 12 seconds before expiry (T-12s window)
 
 
-async function settleExpiredPositions() {
-    try {
-        const paperTrader = await getPaperTrader();
-        if (!paperTrader) return;
-
-        const openPositions = paperTrader.getOpenPositions();
-        if (openPositions.length === 0) return;
-
-        const now = Date.now();
-        const expired = openPositions.filter(pos => pos.expiry_time && now >= new Date(pos.expiry_time).getTime());
-        if (expired.length === 0) return;
-
-        console.log(`[Sniper] Found ${expired.length} expired paper positions. Resolving outcomes...`);
-
-        const cgMap: { [key: string]: string } = {
-            btc: 'bitcoin',
-            eth: 'ethereum',
-            sol: 'solana',
-            bnb: 'binancecoin'
-        };
-
-        for (const position of expired) {
-            console.log(`[Sniper] 🔄 Settling expired position ${position.id} (${position.question})...`);
-
-            // Parse ticker from question text
-            let ticker: 'btc' | 'eth' | 'sol' | 'bnb' = 'btc';
-            const q = (position.question || '').toLowerCase();
-            if (q.includes('ethereum') || q.includes('eth')) ticker = 'eth';
-            else if (q.includes('solana') || q.includes('sol')) ticker = 'sol';
-            else if (q.includes('bnb') || q.includes('binance')) ticker = 'bnb';
-
-            let strikePrice = position.strike_price || 0;
-            let closePrice = 0;
-            let resolvedViaPolymarket = false;
-            let exitPrice = 0.00;
-            let outcome = '🔴 LOSS';
-
-            // 1. Try fetching official Polymarket resolution status first
-            try {
-                const polyRes = await fetch(`https://gamma-api.polymarket.com/markets/${position.marketId}`);
-                const polyMarket = await polyRes.json();
-                if (polyMarket && polyMarket.closed && polyMarket.outcomePrices) {
-                    const outcomePrices = typeof polyMarket.outcomePrices === 'string' 
-                        ? JSON.parse(polyMarket.outcomePrices) 
-                        : polyMarket.outcomePrices;
-                    
-                    const price0 = parseFloat(outcomePrices[0] || '0');
-                    const price1 = parseFloat(outcomePrices[1] || '0');
-
-                    // ONLY set resolvedViaPolymarket = true IF Polymarket has fully finalized resolution (one outcome price > 0.9)
-                    if (price0 > 0.9 || price1 > 0.9) {
-                        const yesWon = price0 > 0.9;
-                        const noWon = price1 > 0.9;
-
-                        if ((position.side === 'YES' && yesWon) || (position.side === 'NO' && noWon)) {
-                            exitPrice = 1.00;
-                            outcome = '🟢 WIN';
-                        } else {
-                            exitPrice = 0.00;
-                            outcome = '🔴 LOSS';
-                        }
-                        resolvedViaPolymarket = true;
-                        console.log(`[Sniper] Resolved position ${position.id} via official Polymarket API: ${outcome} (prices: [${price0}, ${price1}])`);
-                    } else {
-                        console.log(`[Sniper] Polymarket closed but prices not finalized yet ([${price0}, ${price1}]). Falling back to Binance 5m Candle...`);
-                    }
-                }
-            } catch (err) {}
-
-            // 2. If Polymarket has not closed/resolved yet, resolve strictly via exact 5m Candle Close Price
-            if (!resolvedViaPolymarket) {
-                try {
-                    const expiryMs = new Date(position.expiry_time).getTime();
-                    const startTimestampSec = Math.floor((expiryMs - 300000) / 1000);
-
-                    const bvRes = await fetch(`https://data-api.binance.vision/api/v3/klines?symbol=${ticker.toUpperCase()}USDT&interval=5m&limit=20`);
-                    const bvKlines = await bvRes.json();
-                    if (Array.isArray(bvKlines) && bvKlines.length > 0) {
-                        // Find EXACT candle whose open time matches market startTimestampSec
-                        const exactCandle = bvKlines.find((k: any) => Math.floor(k[0] / 1000) === startTimestampSec);
-                        if (exactCandle) {
-                            strikePrice = parseFloat(exactCandle[1]); // Index 1 is Open price (priceStart)
-                            closePrice = parseFloat(exactCandle[4]);  // Index 4 is Close price (priceEnd)
-                            console.log(`[Sniper] ✅ Exact 5m Candle Match for ${ticker.toUpperCase()} (timestamp ${startTimestampSec}): Open=$${strikePrice}, Close=$${closePrice}`);
-                        }
-                    }
-                } catch (err) {}
-
-                // Fallback to CoinGecko live spot price ONLY if Binance Vision candle is missing
-                if (!closePrice || isNaN(closePrice)) {
-                    try {
-                        const cgId = cgMap[ticker] || ticker;
-                        const cgRes = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${cgId}&vs_currencies=usd`);
-                        const cgData = await cgRes.json();
-                        closePrice = parseFloat(cgData?.[cgId]?.usd);
-                    } catch (err) {}
-                }
-
-                if (closePrice > 0 && strikePrice > 0) {
-                    if (position.side === 'YES' && closePrice > strikePrice) {
-                        exitPrice = 1.00;
-                        outcome = '🟢 WIN';
-                    } else if (position.side === 'NO' && closePrice < strikePrice) {
-                        exitPrice = 1.00;
-                        outcome = '🟢 WIN';
-                    } else {
-                        exitPrice = 0.00;
-                        outcome = '🔴 LOSS';
-                    }
-                }
-            }
-
-            const result = await paperTrader.closePosition(position.id, exitPrice);
-            if (result.success) {
-                const pnl = result.pnl || 0;
-                console.log(`[Sniper] Settled position ${position.id} (${position.question}): ${outcome} (ExitPrice: $${exitPrice}, PnL: $${pnl.toFixed(2)})`);
-
-                if (config?.telegramService) {
-                    config.telegramService.sendAlert(
-                        `📄 PAPER: Position Settled\n` +
-                        `Market: ${position.question}\n` +
-                        `Outcome: ${outcome}\n` +
-                        `Exit Price: $${exitPrice}\n` +
-                        `Net PnL: ${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}`
-                    );
-                }
-            }
-        }
-    } catch (error) {
-        console.error('[Sniper] Error in settleExpiredPositions:', error);
-    }
-}
 
 // Cache for T-12s position sizing evaluation per market ID
 const marketSharesCache = new Map<string, number>();
@@ -254,11 +121,6 @@ const BOOST_GAP_THRESHOLDS: { [key in 'btc' | 'eth' | 'sol' | 'bnb']: number } =
 };
 
 async function tick() {
-    try {
-        await settleExpiredPositions();
-    } catch (error) {
-        console.error('[Sniper] Error in settleExpiredPositions:', error);
-    }
     if (!sniperActive) {
         setTimeout(tick, CHECK_INTERVAL);
         return;
@@ -370,54 +232,23 @@ async function executeSnipe(market: any, ticker: 'btc' | 'eth' | 'sol' | 'bnb', 
         console.log(`[Sniper] T-10s Position Size: ${shares} share (Price Gap $${priceGap.toFixed(4)} vs Min Guard $${minGap})`);
 
         // 5. Execute the trade
-        const isPaperMode = config?.getPaperMode ? config.getPaperMode() : true;
-        if (isPaperMode) {
-            const paperTrader = await getPaperTrader();
-            if (!paperTrader) {
-                return { success: false, error: 'Paper trader not initialized' };
-            }
-            const result = await paperTrader.executeTrade({
-                marketId: market.id,
-                question: market.question,
+        const polymarketService = config?.getPolymarketService ? config.getPolymarketService() : null;
+        if (!polymarketService) {
+            return { success: false, error: 'Polymarket Service not initialized (check PROXY_ADDRESS and POLYGON_PRIVATE_KEY)' };
+        }
+        const cost = shares * entryPrice;
+        const result = await polymarketService.placeSnipe(market, side, entryPrice, cost);
+
+        if (result && result.success) {
+            return {
+                success: true,
                 side: side,
+                price: entryPrice,
                 shares: shares,
-                entryPrice: entryPrice,
-                btcPrice: priceValue,
-                strikePrice: strikePrice,
-                expiryTime: market.endDate,
-            });
-
-            if (result.success) {
-                return {
-                    success: true,
-                    side: side,
-                    price: entryPrice,
-                    shares: shares,
-                    priceValue: priceValue,
-                };
-            } else {
-                return { success: false, error: result.error || 'Paper trade failed' };
-            }
+                priceValue: priceValue,
+            };
         } else {
-            // Live Trading!
-            const polymarketService = config?.getPolymarketService ? config.getPolymarketService() : null;
-            if (!polymarketService) {
-                return { success: false, error: 'Polymarket Service not initialized (check PROXY_ADDRESS and POLYGON_PRIVATE_KEY)' };
-            }
-            const cost = shares * entryPrice;
-            const result = await polymarketService.placeSnipe(market, side, entryPrice, cost);
-
-            if (result && result.success) {
-                return {
-                    success: true,
-                    side: side,
-                    price: entryPrice,
-                    shares: shares,
-                    priceValue: priceValue,
-                };
-            } else {
-                return { success: false, error: result?.error || 'Live trade placement failed' };
-            }
+            return { success: false, error: result?.error || 'Live trade placement failed' };
         }
 
     } catch (error) {

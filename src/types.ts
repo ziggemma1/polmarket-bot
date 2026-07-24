@@ -11,7 +11,6 @@ export interface Trade {
 
 export interface BotState {
   enabled: boolean;
-  paperMode: boolean;
   totalTradesToday: number;
   winRate: number;
   pnlToday: number;
