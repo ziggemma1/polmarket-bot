@@ -240,17 +240,17 @@ async function fetchStrikePrice(market: any, ticker: 'btc' | 'eth' | 'sol' | 'bn
 }
 
 const MIN_GAP_THRESHOLDS: { [key in 'btc' | 'eth' | 'sol' | 'bnb']: number } = {
-    btc: 15.00,
-    eth: 1.50,
-    sol: 0.15,
-    bnb: 0.30
+    btc: 30.00,
+    eth: 3.00,
+    sol: 0.30,
+    bnb: 0.80
 };
 
 const BOOST_GAP_THRESHOLDS: { [key in 'btc' | 'eth' | 'sol' | 'bnb']: number } = {
-    btc: 70.00,
-    eth: 5.00,
-    sol: 0.19,
-    bnb: 0.60
+    btc: 100.00,
+    eth: 10.00,
+    sol: 0.50,
+    bnb: 1.50
 };
 
 async function tick() {
@@ -280,7 +280,8 @@ async function tick() {
             executedMarketIds.clear();
         }
 
-        const tickers: ('btc' | 'eth' | 'sol' | 'bnb')[] = ['btc', 'eth', 'sol', 'bnb'];
+        // Strictly target BTC 5-minute markets for maximum precision
+        const tickers: ('btc')[] = ['btc'];
         for (const ticker of tickers) {
             const market = await getCurrentMarket(ticker);
             if (!market) continue;
@@ -363,11 +364,10 @@ async function executeSnipe(market: any, ticker: 'btc' | 'eth' | 'sol' | 'bnb', 
         const side = priceValue > strikePrice ? 'YES' : 'NO';
         console.log(`[Sniper] Side Choice: ${side} (${ticker.toUpperCase()} T-10s spot $${priceValue} vs strike $${strikePrice})`);
 
-        // 4. Calculate position sizing AT EXACT T-10s
+        // 4. Position sizing fixed to 1 share per trade
         const entryPrice = 0.97;
-        const boostGap = BOOST_GAP_THRESHOLDS[ticker];
-        const shares = sharesOverride || (priceGap >= boostGap ? 20 : 10);
-        console.log(`[Sniper] Dynamic T-10s Position Size: ${shares} shares (Price Gap $${priceGap.toFixed(4)} vs Boost threshold $${boostGap})`);
+        const shares = sharesOverride || 1;
+        console.log(`[Sniper] T-10s Position Size: ${shares} share (Price Gap $${priceGap.toFixed(4)} vs Min Guard $${minGap})`);
 
         // 5. Execute the trade
         if (config?.paperMode) {
