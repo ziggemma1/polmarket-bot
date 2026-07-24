@@ -111,7 +111,7 @@ async function bootstrap() {
           });
         }
       },
-      () => state,
+      () => ({ ...state, polymarket }),
       async () => {
         if (state.paperMode) {
           const stats = paperTrader.getStats();

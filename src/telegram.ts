@@ -159,9 +159,16 @@ export class TelegramService {
     this.bot.onText(/\/balance/, async (msg) => {
       if (!this.checkWhitelist(msg)) return;
       this.bot.sendChatAction(msg.chat.id, 'typing');
-      const balance = await this.getBalance();
+      
+      let balance = { usdc: 0, shares: 0 };
+      if (this.getStatus().polymarket) {
+        balance = await this.getStatus().polymarket.getBalance();
+      } else if (this.getBalance) {
+        balance = await this.getBalance();
+      }
+
       this.bot.sendMessage(msg.chat.id, 
-        `💰 *Wallet Balance*\n\n` +
+        `💰 *Live Wallet Balance (Polygon)*\n\n` +
         `USDC: $${balance.usdc.toFixed(2)}\n` +
         `Pending Shares: ${balance.shares}`,
         { parse_mode: 'Markdown', ...mainKeyboard }
