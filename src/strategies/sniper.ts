@@ -107,7 +107,7 @@ async function fetchStrikePrice(market: any, ticker: 'btc' | 'eth' | 'sol' | 'bn
 }
 
 const MIN_GAP_THRESHOLDS: { [key in 'btc' | 'eth' | 'sol' | 'bnb']: number } = {
-    btc: 30.00,
+    btc: 15.00,
     eth: 3.00,
     sol: 0.30,
     bnb: 0.80
