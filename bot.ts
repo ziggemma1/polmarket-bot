@@ -58,7 +58,6 @@ async function bootstrap() {
     logger.warn('DATABASE_URL is missing in environment variables. Running without MongoDB.');
   }
 
-
   const privateKey = process.env.POLYGON_PRIVATE_KEY?.trim() || POLYGON_PRIVATE_KEY?.trim();
   const proxyAddress = process.env.PROXY_ADDRESS?.trim() || PROXY_ADDRESS?.trim();
 
@@ -139,6 +138,12 @@ async function bootstrap() {
     tradingLimit: parseFloat(TRADING_LIMIT_PER_TRADE),
     maxDailyTrades: parseInt(MAX_DAILY_TRADES)
   });
+  // Delay auto-start by 3s to let Telegram polling flush any stale /snipes off commands
+  setTimeout(() => {
+    startSniper();
+    state.enabled = true;
+    logger.info('Sniper auto-started after 3s flush delay');
+  }, 3000);
 }
 
 bootstrap().catch(err => {
@@ -178,6 +183,10 @@ const server = app.listen(PORT, '0.0.0.0', () => {
   logger.info(`Health server started on port ${PORT}`);
 });
 
-server.on('error', (err) => {
-  logger.error('Express server error:', err);
+server.on('error', (err: any) => {
+  if (err.code === 'EADDRINUSE') {
+    logger.warn(`Port ${PORT} is already in use. Skipping Express health server on local bot.`);
+  } else {
+    logger.error('Express server error:', err);
+  }
 });

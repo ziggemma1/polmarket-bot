@@ -31,11 +31,21 @@ export async function getCurrentMarket(ticker: 'btc' | 'eth' | 'sol' | 'bnb') {
 
     try {
         // Query the specific market by its exact slug
-        const url = `${GAMMA_API}/markets?slug=${slug}`;
-        const response = await axios.get(url);
+        let url = `${GAMMA_API}/markets?slug=${slug}`;
+        let response = await axios.get(url);
+        let market = response.data && response.data.length > 0 ? response.data[0] : null;
 
-        if (response.data && response.data.length > 0) {
-            const market = response.data[0];
+        // Fallback: Query active updown-5m markets if exact slug isn't indexed yet
+        if (!market) {
+            const fallbackUrl = `${GAMMA_API}/markets?active=true&closed=false&order=startDate&ascending=false&limit=20`;
+            const fallbackRes = await axios.get(fallbackUrl);
+            if (fallbackRes.data && Array.isArray(fallbackRes.data)) {
+                // Strictly enforce that the found market MUST be for the exact target slug
+                market = fallbackRes.data.find((m: any) => m.slug === slug);
+            }
+        }
+
+        if (market) {
             logger.info(`[Scanner] ✅ ${ticker.toUpperCase()} Market found: ${market.question}`);
             
             // Extract tokens correctly

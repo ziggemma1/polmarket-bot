@@ -221,12 +221,17 @@ export class PolymarketService {
       }
       
       // 2. Post order with Level-2 credentials attached
-      const order = await this.client.createAndPostOrder({
-        tokenID: tokenId,
-        price: price,
-        side: Side.BUY,
-        size: Math.max(1, Math.floor(size / price)), // Amount of shares
-      } as any);
+      const order = await this.client.createAndPostOrder(
+        {
+          tokenID: tokenId,
+          price: price,
+          side: Side.BUY,
+          size: Math.max(5, Math.floor(size / price)), // Amount of shares (Polymarket orderMinSize = 5)
+          feeRateBps: 1000
+        },
+        {},
+        OrderType.FOK as any
+      );
 
       logger.info(`Live snipe order response: ${JSON.stringify(order)}`);
 
