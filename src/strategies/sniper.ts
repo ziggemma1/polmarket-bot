@@ -7,6 +7,7 @@ import logger from '../logger';
 export interface SniperConfig {
   getPolymarketService: () => any; // The PolymarketService instance
   getPaperTraderService?: () => any;
+  getIsPaperMode: () => boolean;
   telegramService: any;
   tradingLimit: number;
   maxDailyTrades: number; // Configured via environment variable
@@ -221,9 +222,11 @@ async function tick() {
             const tickers = allTickers.filter(t => activeAssetsConfig[t]);
 
             if (tickers.length === 0) {
+                console.log(`[Sniper Diagnostic] ⚠️ No tickers active in activeAssetsConfig! (btc, eth, sol, bnb are all false)`);
                 setTimeout(tick, CHECK_INTERVAL);
                 return;
             }
+            console.log(`[Sniper Diagnostic] T-12s Window Active. Active Tickers: ${tickers.map(t => t.toUpperCase()).join(', ')}`);
 
             for (const ticker of tickers) {
                 const tickerBoundaryKey = `${boundaryKey}-${ticker}`;
@@ -233,7 +236,7 @@ async function tick() {
 
                 const market = await getCurrentMarket(ticker);
                 if (!market) {
-                    console.log(`[Sniper] ⚠️ No ${ticker.toUpperCase()} market found at T-${secondsLeft}s`);
+                    console.log(`[Sniper Diagnostic] ⚠️ getCurrentMarket('${ticker}') returned NULL at T-${secondsLeft}s (market not found/indexed yet)`);
                     continue;
                 }
 
@@ -299,11 +302,12 @@ async function executeSnipe(market: any, ticker: 'btc' | 'eth' | 'sol' | 'bnb', 
         }
         console.log(`[Sniper] Verified Strike Price: $${strikePrice}`);
 
-        // MINIMUM GAP GUARD FOR ALL 4 CRYPTOS: If price gap <= minGap, abort trade execution immediately
+        // MINIMUM GAP GUARD FOR ALL 4 CRYPTOS: Log computed gap vs threshold every time
         const priceGap = Math.abs(priceValue - strikePrice);
         const minGap = MIN_GAP_THRESHOLDS[ticker];
+        console.log(`[Sniper Diagnostic] ${ticker.toUpperCase()} Computed Price Gap: $${priceGap.toFixed(4)} | Noise Guard Threshold: $${minGap}`);
         if (priceGap <= minGap) {
-            console.log(`[Sniper] 🛑 ${ticker.toUpperCase()} Minimum Gap Guard Triggered: Price gap is $${priceGap.toFixed(4)} (<= $${minGap} noise band). Skipping trade.`);
+            console.log(`[Sniper Diagnostic] 🛑 ${ticker.toUpperCase()} Minimum Gap Guard Triggered: Price gap is $${priceGap.toFixed(4)} (<= $${minGap} noise band). Skipping trade.`);
             return { success: false, error: `${ticker.toUpperCase()} Price gap $${priceGap.toFixed(4)} is within $${minGap} noise band. Execution skipped.` };
         }
 
@@ -318,12 +322,18 @@ async function executeSnipe(market: any, ticker: 'btc' | 'eth' | 'sol' | 'bnb', 
         const shares = sharesOverride || defaultShares;
         console.log(`[Sniper] T-10s Position Size: ${shares} shares (${isBoosted ? '🚀 BOOSTED SIGNAL' : 'Standard Tier'} | Price Gap $${priceGap.toFixed(4)} vs Boost Guard $${BOOST_GAP_THRESHOLDS[ticker]})`);
 
-        // 5. Execute the trade
-        const polymarketService = config?.getPolymarketService ? config.getPolymarketService() : null;
-        if (!polymarketService) {
-            return { success: false, error: 'Polymarket Service not initialized (check PROXY_ADDRESS and POLYGON_PRIVATE_KEY)' };
+        // 5. Execute the trade (Paper vs Live mode routing)
+        const isPaper = config?.getIsPaperMode ? config.getIsPaperMode() : true;
+        let result;
+        if (isPaper) {
+          const paperTrader = config?.getPaperTraderService?.();
+          console.log(`[Sniper] Executing in PAPER mode for ${ticker.toUpperCase()}`);
+          result = await paperTrader.placePaperTrade(market, side, entryPrice, shares, priceValue, strikePrice);
+        } else {
+          const polymarketService = config?.getPolymarketService?.();
+          console.log(`[Sniper] Executing in LIVE mode for ${ticker.toUpperCase()}`);
+          result = await polymarketService.placeSnipe(market, side, entryPrice, shares);
         }
-        const result = await polymarketService.placeSnipe(market, side, entryPrice, shares);
 
         if (result && result.success) {
             return {

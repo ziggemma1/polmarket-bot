@@ -22,8 +22,9 @@ export class PolymarketService {
         if (key.match(/^(0x)?[0-9a-fA-F]{64}$/)) {
           this.wallet = new Wallet(key);
           // Initialize base CLOB client with polygon chain ID (137) and wallet
+          // Magic Link / email-login Polymarket accounts use POLY_PROXY (1), not POLY_1271 or POLY_GNOSIS_SAFE
           const isProxy = this.proxyAddress && this.proxyAddress.toLowerCase() !== this.wallet.address.toLowerCase();
-          const sigType = isProxy ? SignatureTypeV2.POLY_1271 : SignatureTypeV2.EOA;
+          const sigType = isProxy ? SignatureTypeV2.POLY_PROXY : SignatureTypeV2.EOA;
         this.client = new ClobClient({
           host: 'https://clob.polymarket.com',
           chain: 137 as any,
@@ -213,8 +214,9 @@ export class PolymarketService {
       try {
         const apiCreds = await this.client.createOrDeriveApiKey();
         if (apiCreds && this.wallet) {
+          // Magic Link / email-login Polymarket accounts use POLY_PROXY (1), not POLY_1271 or POLY_GNOSIS_SAFE
           const isProxy = this.proxyAddress && this.proxyAddress.toLowerCase() !== this.wallet?.address.toLowerCase();
-          const sigType = isProxy ? SignatureTypeV2.POLY_1271 : SignatureTypeV2.EOA;
+          const sigType = isProxy ? SignatureTypeV2.POLY_PROXY : SignatureTypeV2.EOA;
           this.client = new ClobClient({
             host: 'https://clob.polymarket.com',
             chain: 137 as any,

@@ -62,13 +62,17 @@ export class TelegramService {
     this.bot.onText(/\/start/, (msg: any) => {
       if (!this.checkWhitelist(msg)) return;
       const status = this.getStatus();
-      const isPaper = status.paperMode;
+      if (!status.enabled) {
+        this.onToggle(true);
+      }
+      const updatedStatus = this.getStatus();
+      const isPaper = updatedStatus.paperMode;
       this.bot.sendMessage(msg.chat.id, 
         `🤖 *Polymarket Sniper Bot*\n\n` +
-        `Status: ${status.enabled ? '🟢 RUNNING' : '🔴 STOPPED'}\n` +
+        `Status: ${updatedStatus.enabled ? '🟢 RUNNING' : '🔴 STOPPED'}\n` +
         `Mode: ${isPaper ? '📄 PAPER TRADING' : '🔴 LIVE TRADING'}\n` +
-        `Win Rate: ${status.winRate.toFixed(1)}%\n` +
-        `Daily P&L: $${status.pnlToday.toFixed(2)}\n\n` +
+        `Win Rate: ${updatedStatus.winRate.toFixed(1)}%\n` +
+        `Daily P&L: $${updatedStatus.pnlToday.toFixed(2)}\n\n` +
         `Use the menu below or type /help to see all commands.`,
         { parse_mode: 'Markdown', ...mainKeyboard }
       );

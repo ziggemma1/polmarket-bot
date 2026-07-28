@@ -144,16 +144,13 @@ async function bootstrap() {
   initSniper({
     getPolymarketService: () => polymarket,
     getPaperTraderService: () => paperTrader,
+    getIsPaperMode: () => isPaperMode,
     telegramService: telegram,
     tradingLimit: parseFloat(TRADING_LIMIT_PER_TRADE),
     maxDailyTrades: parseInt(MAX_DAILY_TRADES)
   });
 
-  setTimeout(() => {
-    startSniper();
-    state.enabled = true;
-    logger.info('Sniper auto-started after 3s flush delay');
-  }, 3000);
+  logger.info(`Bot online. Mode: ${isPaperMode ? 'PAPER' : 'LIVE'}. Sniper: STOPPED. Use Telegram or dashboard to start.`);
 }
 
 bootstrap().catch(err => {
