@@ -16,7 +16,8 @@ export class TelegramService {
     private onToggle: (enabled: boolean) => void,
     private getStatus: () => any,
     private getBalance: () => Promise<any>,
-    private getMarkets: () => Promise<any[]>
+    private getMarkets: () => Promise<any[]>,
+    private togglePaperMode?: (enabled: boolean) => void
   ) {
     this.bot = new TelegramBot(token, { 
       polling: {
@@ -31,11 +32,11 @@ export class TelegramService {
     this.aiAnalyst = new AIAnalystService();
     this.setupCommands();
     
-    this.bot.on('polling_error', (error) => {
+    this.bot.on('polling_error', (error: any) => {
       logger.error('Telegram polling error:', error);
     });
 
-    this.bot.on('error', (error) => {
+    this.bot.on('error', (error: any) => {
       logger.error('Telegram general error:', error);
     });
     
@@ -47,10 +48,10 @@ export class TelegramService {
       reply_markup: {
         keyboard: [
           [{ text: '/start' }, { text: '/status' }],
-          [{ text: '/balance' }],
+          [{ text: '/balance' }, { text: '/mode paper' }, { text: '/mode live' }],
           [{ text: '/snipes on' }, { text: '/snipes off' }],
           [{ text: '/ai' }, { text: '/aiinsights' }],
-          [{ text: '/markets' }, { text: '/recent' }]
+          [{ text: '/markets' }, { text: '/recent' }],
           [{ text: '/help' }]
         ],
         resize_keyboard: true,
@@ -58,12 +59,14 @@ export class TelegramService {
       }
     };
 
-    this.bot.onText(/\/start/, (msg) => {
+    this.bot.onText(/\/start/, (msg: any) => {
       if (!this.checkWhitelist(msg)) return;
       const status = this.getStatus();
+      const isPaper = status.paperMode;
       this.bot.sendMessage(msg.chat.id, 
         `🤖 *Polymarket Sniper Bot*\n\n` +
         `Status: ${status.enabled ? '🟢 RUNNING' : '🔴 STOPPED'}\n` +
+        `Mode: ${isPaper ? '📄 PAPER TRADING' : '🔴 LIVE TRADING'}\n` +
         `Win Rate: ${status.winRate.toFixed(1)}%\n` +
         `Daily P&L: $${status.pnlToday.toFixed(2)}\n\n` +
         `Use the menu below or type /help to see all commands.`,
@@ -71,37 +74,54 @@ export class TelegramService {
       );
     });
 
-    this.bot.onText(/\/snipes (on|off)/, (msg, match) => {
+    this.bot.onText(/\/mode (paper|live)/, (msg: any, match: any) => {
+      if (!this.checkWhitelist(msg)) return;
+      const enablePaper = match![1] === 'paper';
+      if (this.togglePaperMode) {
+        this.togglePaperMode(enablePaper);
+      }
+      this.bot.sendMessage(msg.chat.id, `Trading Mode switched to: ${enablePaper ? '📄 PAPER TRADING' : '🔴 LIVE TRADING'}`, mainKeyboard);
+    });
+
+    this.bot.onText(/\/snipes (on|off)/, (msg: any, match: any) => {
       if (!this.checkWhitelist(msg)) return;
       const enabled = match![1] === 'on';
       this.onToggle(enabled);
       this.bot.sendMessage(msg.chat.id, `Sniper loop turned ${enabled ? 'ON 🟢' : 'OFF 🔴'}`, mainKeyboard);
     });
 
-
-
-    this.bot.onText(/\/status/, async (msg) => {
+    this.bot.onText(/\/status/, async (msg: any) => {
       if (!this.checkWhitelist(msg)) return;
       const status = this.getStatus();
-      let tradesToday = status.totalTradesToday;
-      let winRate = status.winRate;
-      let pnlToday = status.pnlToday;
+      const isPaper = status.paperMode;
       
       this.bot.sendMessage(msg.chat.id, 
         `📊 *System Status*\n\n` +
         `Sniping: ${status.enabled ? 'Active 🟢' : 'Idle 🔴'}\n` +
-        `Mode: 🔴 LIVE\n` +
-        `Trades Today: ${tradesToday}\n` +
-        `Win Rate: ${winRate.toFixed(1)}%\n` +
-        `Current P&L: $${pnlToday.toFixed(2)}`,
+        `Mode: ${isPaper ? '📄 PAPER TRADING' : '🔴 LIVE TRADING'}\n` +
+        `Trades Today: ${status.totalTradesToday}\n` +
+        `Win Rate: ${status.winRate.toFixed(1)}%\n` +
+        `Current P&L: $${status.pnlToday.toFixed(2)}`,
         { parse_mode: 'Markdown', ...mainKeyboard }
       );
     });
 
-    this.bot.onText(/\/balance/, async (msg) => {
+    this.bot.onText(/\/balance/, async (msg: any) => {
       if (!this.checkWhitelist(msg)) return;
       this.bot.sendChatAction(msg.chat.id, 'typing');
       
+      const status = this.getStatus();
+      if (status.paperMode && status.paperTrader) {
+        const bal = status.paperTrader.getBalance();
+        this.bot.sendMessage(msg.chat.id, 
+          `💰 *Paper Wallet Balance*\n\n` +
+          `Virtual Cash: $${bal.toFixed(2)} USDC\n` +
+          `Mode: 📄 Paper Simulation`,
+          { parse_mode: 'Markdown', ...mainKeyboard }
+        );
+        return;
+      }
+
       let balance = { usdc: 0, shares: 0 };
       if (this.getStatus().polymarket) {
         balance = await this.getStatus().polymarket.getBalance();
@@ -117,7 +137,7 @@ export class TelegramService {
       );
     });
 
-    this.bot.onText(/\/markets/, async (msg) => {
+    this.bot.onText(/\/markets/, async (msg: any) => {
       if (!this.checkWhitelist(msg)) return;
       this.bot.sendChatAction(msg.chat.id, 'typing');
       try {
@@ -157,11 +177,9 @@ export class TelegramService {
       }
     });
 
-    this.bot.onText(/\/recent/, (msg) => {
+    this.bot.onText(/\/recent/, (msg: any) => {
       if (!this.checkWhitelist(msg)) return;
       const status = this.getStatus();
-      
-
       
       if (status.lastTrades.length === 0) {
         this.bot.sendMessage(msg.chat.id, "No recent trades found.", mainKeyboard);
@@ -175,41 +193,12 @@ export class TelegramService {
       this.bot.sendMessage(msg.chat.id, `🕒 *Recent Trades*\n\n${tradeList}`, { parse_mode: 'Markdown', ...mainKeyboard });
     });
 
-    
-    this.bot.onText(/\/close all/, async (msg) => {
-        if (!this.checkWhitelist(msg)) return;
-        try {
-            const openPositions = this.paperTrader.getOpenPositions();
-            
-            if (openPositions.length === 0) {
-                await this.bot.sendMessage(msg.chat.id, '📭 No open positions to close.', mainKeyboard);
-                return;
-            }
-
-            let closed = 0;
-            let totalPnL = 0;
-            for (const pos of openPositions) {
-                const result = await this.paperTrader.closePosition(pos.id, 0.00);
-                if (result.success) {
-                    closed++;
-                    totalPnL += result.pnl || 0;
-                }
-            }
-
-            await this.bot.sendMessage(
-                msg.chat.id,
-                `🔒 Emergency Close Complete\n` +
-                `Closed: ${closed}/${openPositions.length} positions\n` +
-                `Total PnL: ${totalPnL.toFixed(2)}`,
-                mainKeyboard
-            );
-        } catch (error) {
-            await this.bot.sendMessage(msg.chat.id, `❌ Error: ${error.message}`);
-        }
+    this.bot.onText(/\/close(?:\s+(.*))?/, async (msg: any) => {
+      if (!this.checkWhitelist(msg)) return;
+      this.bot.sendMessage(msg.chat.id, `ℹ️ *Position Management*\n\nManual position closing is not yet implemented for live trading. All 5-minute binary options auto-settle upon candle expiration on Polymarket.`, { parse_mode: 'Markdown', ...mainKeyboard });
     });
 
-    
-    this.bot.onText(/\/aiinsights/, async (msg) => {
+    this.bot.onText(/\/aiinsights/, async (msg: any) => {
       if (!this.checkWhitelist(msg)) return;
       this.bot.sendChatAction(msg.chat.id, 'typing');
       
@@ -218,7 +207,7 @@ export class TelegramService {
       this.bot.sendMessage(msg.chat.id, `🤖 *AI Trade Performance Insights*\n\n${aiResponse}`, { parse_mode: 'Markdown', ...mainKeyboard });
     });
 
-    this.bot.onText(/\/(ai|ask)(?:\s+(.*))?/, async (msg, match) => {
+    this.bot.onText(/\/(ai|ask)(?:\s+(.*))?/, async (msg: any, match: any) => {
       if (!this.checkWhitelist(msg)) return;
       const userPrompt = match![2]?.trim();
 
@@ -245,23 +234,22 @@ export class TelegramService {
       this.bot.sendMessage(msg.chat.id, `🤖 *AI Analyst Response*\n\n${aiResponse}`, { parse_mode: 'Markdown', ...mainKeyboard });
     });
 
-    // Conversational Fallback: Any regular text message sent by authorized user will be answered by AI Analyst
+    // Catch all text messages for AI processing if none of the explicit commands matched
     this.bot.on('message', async (msg: any) => {
-      if (!this.checkWhitelist(msg)) return;
-      const text = msg.text?.trim();
+      // Ignore text if it starts with a command prefix or if it has no text
+      if (!msg.text || msg.text.startsWith('/')) return;
 
-      // Skip slash commands
-      if (!text || text.startsWith('/')) return;
+      if (!this.checkWhitelist(msg)) return;
 
       this.bot.sendChatAction(msg.chat.id, 'typing');
       const history = this.getStatus().lastTrades;
       const markets = await this.getMarkets();
-      const aiResponse = await this.aiAnalyst.askAnalyst(text, history, markets?.[0] || null);
+      const aiResponse = await this.aiAnalyst.askAnalyst(msg.text, history, markets?.[0] || null);
 
       this.bot.sendMessage(msg.chat.id, `🤖 *AI Analyst Response*\n\n${aiResponse}`, { parse_mode: 'Markdown', ...mainKeyboard });
     });
 
-    this.bot.onText(/\/help/, (msg) => {
+    this.bot.onText(/\/help/, (msg: any) => {
       if (!this.checkWhitelist(msg)) return;
       const help = `🛠 *Available Commands*\n\n` +
         `/start - Bot status & menu\n` +
@@ -291,4 +279,3 @@ export class TelegramService {
     this.bot.sendMessage(this.whitelist, message, { parse_mode: 'Markdown' });
   }
 }
-// UI Sync

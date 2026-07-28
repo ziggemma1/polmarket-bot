@@ -1,6 +1,6 @@
 import axios from 'axios';
-import { Wallet } from 'ethers';
-import { ClobClient, Side, OrderType, SignatureType } from '@polymarket/clob-client';
+import { Wallet, providers, Contract, utils } from 'ethers';
+import { ClobClient, Side, OrderType, SignatureTypeV2 } from '@polymarket/clob-client-v2';
 import logger from './logger';
 import { MarketMetadata, Trade } from './types';
 
@@ -23,8 +23,15 @@ export class PolymarketService {
           this.wallet = new Wallet(key);
           // Initialize base CLOB client with polygon chain ID (137) and wallet
           const isProxy = this.proxyAddress && this.proxyAddress.toLowerCase() !== this.wallet.address.toLowerCase();
-          const sigType = isProxy ? SignatureType.POLY_GNOSIS_SAFE : SignatureType.EOA;
-          this.client = new ClobClient('https://clob.polymarket.com', 137, this.wallet, undefined, sigType, isProxy ? this.proxyAddress : undefined);
+          const sigType = isProxy ? SignatureTypeV2.POLY_1271 : SignatureTypeV2.EOA;
+        this.client = new ClobClient({
+          host: 'https://clob.polymarket.com',
+          chain: 137 as any,
+          signer: this.wallet as any,
+          creds: undefined,
+          signatureType: sigType,
+          funderAddress: isProxy ? this.proxyAddress : undefined
+        });
           logger.info('Polymarket trading client wallet attached successfully.');
         } else {
           logger.warn('Invalid private key format provided. PolymarketService running in discovery mode.');
@@ -44,37 +51,41 @@ export class PolymarketService {
         return { usdc: 0, shares: 0 };
       }
 
-      // Query USDC (Polygon Native USDC / bridged USDC) balance via Polygon public RPC
+      // Polymarket USD (pUSD): 0xC011a7E12a19f7B1f670d46F03B03f3342E82DFB
       // Native USDC on Polygon: 0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359
       // USDC.e (Bridged USDC): 0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174
+      const pusdAddress = '0xC011a7E12a19f7B1f670d46F03B03f3342E82DFB';
       const usdcEAddress = '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174';
       const nativeUsdcAddress = '0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359';
 
       const usdcAbi = ['function balanceOf(address owner) view returns (uint256)'];
       const rpcUrls = [
-        'https://polygon-rpc.com',
-        'https://rpc-mainnet.maticvigil.com',
         'https://polygon-bor-rpc.publicnode.com',
-        'https://1rpc.io/matter/polygon'
+        'https://1rpc.io/matic',
+        'https://polygon-rpc.com'
       ];
 
+      let balPusd = '0';
       let balUsdcE = '0';
       let balNative = '0';
 
       for (const rpcUrl of rpcUrls) {
         try {
-          const provider = new (require('ethers').providers.JsonRpcProvider)(rpcUrl);
-          const contractUsdcE = new (require('ethers').Contract)(usdcEAddress, usdcAbi, provider);
-          const contractNativeUsdc = new (require('ethers').Contract)(nativeUsdcAddress, usdcAbi, provider);
+          const provider = new providers.JsonRpcProvider(rpcUrl);
+          const contractPusd = new Contract(pusdAddress, usdcAbi, provider);
+          const contractUsdcE = new Contract(usdcEAddress, usdcAbi, provider);
+          const contractNativeUsdc = new Contract(nativeUsdcAddress, usdcAbi, provider);
 
-          const [b1, b2] = await Promise.all([
+          const [b0, b1, b2] = await Promise.all([
+            contractPusd.balanceOf(targetAddress),
             contractUsdcE.balanceOf(targetAddress),
             contractNativeUsdc.balanceOf(targetAddress)
           ]);
 
+          balPusd = b0.toString();
           balUsdcE = b1.toString();
           balNative = b2.toString();
-          if (b1.gt(0) || b2.gt(0)) {
+          if (b0.gt(0) || b1.gt(0) || b2.gt(0)) {
             break; // Found balance successfully
           }
         } catch (e) {
@@ -82,20 +93,11 @@ export class PolymarketService {
         }
       }
 
-      // USDC uses 6 decimals
-      const usdcEFormatted = parseFloat(require('ethers').utils.formatUnits(balUsdcE, 6));
-      const nativeFormatted = parseFloat(require('ethers').utils.formatUnits(balNative, 6));
-      let totalUsdc = usdcEFormatted + nativeFormatted;
-
-      // Fallback: If RPC returned 0, query official Polymarket Gamma User Portfolio API
-      if (totalUsdc === 0 && targetAddress) {
-        try {
-          const gammaRes = await axios.get(`https://gamma-api.polymarket.com/users/${targetAddress.toLowerCase()}`);
-          if (gammaRes.data && (gammaRes.data.cash || gammaRes.data.portfolioValue)) {
-            totalUsdc = parseFloat(gammaRes.data.cash || gammaRes.data.portfolioValue || '0');
-          }
-        } catch (e) {}
-      }
+      // USDC/pUSD uses 6 decimals
+      const pusdFormatted = parseFloat(utils.formatUnits(balPusd, 6));
+      const usdcEFormatted = parseFloat(utils.formatUnits(balUsdcE, 6));
+      const nativeFormatted = parseFloat(utils.formatUnits(balNative, 6));
+      const totalUsdc = pusdFormatted + usdcEFormatted + nativeFormatted;
 
       return { usdc: totalUsdc, shares: 0 };
     } catch (err) {
@@ -210,33 +212,83 @@ export class PolymarketService {
       // 1. Deriving Level-2 API Credentials from Ethers Wallet Signature
       try {
         const apiCreds = await this.client.createOrDeriveApiKey();
-        if (apiCreds && apiCreds.key) {
-          // Re-instantiate ClobClient with Level-2 API credentials attached
+        if (apiCreds && this.wallet) {
           const isProxy = this.proxyAddress && this.proxyAddress.toLowerCase() !== this.wallet?.address.toLowerCase();
-          const sigType = isProxy ? SignatureType.POLY_GNOSIS_SAFE : SignatureType.EOA;
-          this.client = new ClobClient('https://clob.polymarket.com', 137, this.wallet, apiCreds, sigType, isProxy ? this.proxyAddress : undefined);
+          const sigType = isProxy ? SignatureTypeV2.POLY_1271 : SignatureTypeV2.EOA;
+          this.client = new ClobClient({
+            host: 'https://clob.polymarket.com',
+            chain: 137 as any,
+            signer: this.wallet as any,
+            creds: apiCreds,
+            signatureType: sigType,
+            funderAddress: isProxy ? this.proxyAddress : undefined
+          });
         }
       } catch (e: any) {
         logger.warn('Failed to derive CLOB API credentials:', e?.message || e);
       }
       
-      // 2. Post order with Level-2 credentials attached
+      // 2. Fetch live order book & depth check
+      let orderbook: any = null;
+      try {
+        orderbook = await this.client.getOrderBook(tokenId);
+      } catch (e: any) {
+        logger.warn(`[CLOB Client] Failed to fetch orderbook for ${side}: ${e?.message || e}`);
+      }
+
+      const asks = orderbook?.asks || [];
+      if (!asks || asks.length === 0) {
+        return { success: false, error: 'No liquidity available on orderbook' };
+      }
+
+      // Asks sorted ascending
+      const bestAsk = parseFloat(asks[0].price);
+      // Marketable price: bestAsk + 0.001 buffer, capped at 0.999 max limit
+      const targetPrice = Math.min(0.999, Math.max(price, bestAsk + 0.001));
+
+      // Order book depth check: sum available ask size at or below targetPrice
+      let availableShares = 0;
+      for (const ask of asks) {
+        const askPrice = parseFloat(ask.price);
+        if (askPrice <= targetPrice) {
+          availableShares += parseFloat(ask.size);
+        }
+      }
+
+      if (availableShares < 1) {
+        return { success: false, error: 'No liquidity available at this price' };
+      }
+
+      // Cap requested shares to available depth
+      const fillableSize = Math.floor(Math.min(size, availableShares));
+      if (fillableSize < 1) {
+        return { success: false, error: 'Available share depth less than 1 share' };
+      }
+
+      const cleanPrice = Math.round(targetPrice * 1000) / 1000;
+      logger.info(`[CLOB Client] Marketable Price: $${cleanPrice} | Available Depth: ${availableShares.toFixed(2)} | Order Size: ${fillableSize} shares`);
+
+      // Explicitly pass OrderType.FAK (Fill-And-Kill) as 3rd argument
       const order = await this.client.createAndPostOrder(
         {
           tokenID: tokenId,
-          price: price,
+          price: cleanPrice,
           side: Side.BUY,
-          size: Math.max(5, Math.floor(size / price)), // Amount of shares (Polymarket orderMinSize = 5)
-          feeRateBps: 1000
+          size: fillableSize
         },
         {},
-        OrderType.FOK as any
+        OrderType.FAK as any
       );
 
-      logger.info(`Live snipe order response: ${JSON.stringify(order)}`);
+      logger.info(`[CLOB Client] Order Post Result: ${JSON.stringify(order)}`);
 
-      if (order && (order.error || order.errorMsg || order.success === false)) {
-        return { success: false, error: order.error || order.errorMsg || 'Order was rejected by Polymarket CLOB' };
+      if (!order || !order.success || order.errorMsg) {
+        const errMsg = typeof order?.errorMsg === 'string' ? order.errorMsg : JSON.stringify(order?.errorMsg || order);
+        logger.error(`Live snipe order response: ${JSON.stringify(order)}`);
+        if (errMsg.includes('insufficient funds')) {
+          return { success: false, error: 'Insufficient funds on Polymarket proxy wallet.' };
+        }
+        return { success: false, error: errMsg };
       }
 
       return {
@@ -245,9 +297,9 @@ export class PolymarketService {
           timestamp: new Date().toISOString(),
           marketId: market.id,
           side,
-          entryPrice: price,
+          entryPrice: cleanPrice,
           btcPrice: 0,
-          amount: size,
+          amount: fillableSize,
           status: 'FILLED'
         }
       };

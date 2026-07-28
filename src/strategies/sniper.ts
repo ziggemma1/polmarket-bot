@@ -5,8 +5,8 @@ import axios from 'axios';
 import logger from '../logger';
 
 export interface SniperConfig {
-  getPaperMode: () => boolean;
   getPolymarketService: () => any; // The PolymarketService instance
+  getPaperTraderService?: () => any;
   telegramService: any;
   tradingLimit: number;
   maxDailyTrades: number; // Configured via environment variable
@@ -37,9 +37,10 @@ const marketSharesCache = new Map<string, number>();
 
 async function fetchSpotPrice(ticker: 'btc' | 'eth' | 'sol' | 'bnb'): Promise<number> {
     let priceValue = 0;
+    // 1. Pyth Hermes Latest Spot API
     try {
         const feedId = PYTH_IDS[ticker];
-        const response = await axios.get(`https://hermes.pyth.network/v2/updates/price/latest?ids[]=${feedId}`, { timeout: 5000 });
+        const response = await axios.get(`https://hermes.pyth.network/v2/updates/price/latest?ids[]=${feedId}`, { timeout: 3000 });
         const data = response.data;
         if (data && data.parsed && data.parsed.length > 0) {
             const p = data.parsed[0].price;
@@ -48,6 +49,43 @@ async function fetchSpotPrice(ticker: 'btc' | 'eth' | 'sol' | 'bnb'): Promise<nu
     } catch (e: any) {
         logger.warn(`[Sniper] Pyth latest Spot Price API error for ${ticker.toUpperCase()}: ${e.message}`);
     }
+
+    // 2. Binance Public Ticker Fallback
+    if (!priceValue || isNaN(priceValue)) {
+        try {
+            const binanceRes = await axios.get(`https://api.binance.com/api/v3/ticker/price?symbol=${ticker.toUpperCase()}USDT`, { timeout: 2500 });
+            if (binanceRes.data?.price) {
+                priceValue = parseFloat(binanceRes.data.price);
+                logger.info(`[Sniper] Binance spot fallback used for ${ticker.toUpperCase()}: $${priceValue}`);
+            }
+        } catch (e: any) {}
+    }
+
+    // 3. Binance Vision Fallback
+    if (!priceValue || isNaN(priceValue)) {
+        try {
+            const bvRes = await axios.get(`https://data-api.binance.vision/api/v3/ticker/price?symbol=${ticker.toUpperCase()}USDT`, { timeout: 2500 });
+            if (bvRes.data?.price) {
+                priceValue = parseFloat(bvRes.data.price);
+                logger.info(`[Sniper] Binance Vision spot fallback used for ${ticker.toUpperCase()}: $${priceValue}`);
+            }
+        } catch (e: any) {}
+    }
+
+    // 4. Coinbase Public Ticker Fallback
+    if (!priceValue || isNaN(priceValue)) {
+        try {
+            const cbRes = await axios.get(`https://api.exchange.coinbase.com/products/${ticker.toUpperCase()}-USD/ticker`, {
+                headers: { 'User-Agent': 'polmarket-bot' },
+                timeout: 2500
+            });
+            if (cbRes.data?.price) {
+                priceValue = parseFloat(cbRes.data.price);
+                logger.info(`[Sniper] Coinbase spot fallback used for ${ticker.toUpperCase()}: $${priceValue}`);
+            }
+        } catch (e: any) {}
+    }
+
     return priceValue;
 }
 
@@ -125,18 +163,30 @@ async function fetchStrikePrice(market: any, ticker: 'btc' | 'eth' | 'sol' | 'bn
 // Minimum spread threshold (in dollars) to trigger a snipe. 
 // A higher value prevents trading on flat/noisy candles where fees/spread would wipe out profit.
 const MIN_GAP_THRESHOLDS: { [key in 'btc' | 'eth' | 'sol' | 'bnb']: number } = {
-    btc: 15.00,
-    eth: 1.0,
-    sol: 0.05,
-    bnb: 0.2
+    btc: 30.00,
+    eth: 1.50,
+    sol: 0.10,
+    bnb: 0.25
 };
 
 const BOOST_GAP_THRESHOLDS: { [key in 'btc' | 'eth' | 'sol' | 'bnb']: number } = {
     btc: 100.00,
-    eth: 10.00,
-    sol: 0.50,
-    bnb: 1.50
+    eth: 15.00,
+    sol: 0.75,
+    bnb: 2.50
 };
+
+export const activeAssetsConfig: { [key in 'btc' | 'eth' | 'sol' | 'bnb']: boolean } = {
+    btc: true,
+    eth: false,
+    sol: false,
+    bnb: false
+};
+
+export function toggleAssetConfig(ticker: 'btc' | 'eth' | 'sol' | 'bnb', enabled: boolean) {
+    activeAssetsConfig[ticker] = enabled;
+    logger.info(`[Sniper] Crypto asset ${ticker.toUpperCase()} trading set to: ${enabled ? 'ACTIVE 🟢' : 'INACTIVE ⚪'}`);
+}
 
 async function tick() {
     if (!sniperActive) {
@@ -167,19 +217,20 @@ async function tick() {
 
         // Only fetch market and attempt trade in the T-12s window
         if (secondsLeft <= 12 && secondsLeft > 0) {
-            // Check if we already executed for this specific 5-minute boundary
-            if (executedMarketIds.has(boundaryKey)) {
+            const allTickers: ('btc' | 'eth' | 'sol' | 'bnb')[] = ['btc', 'eth', 'sol', 'bnb'];
+            const tickers = allTickers.filter(t => activeAssetsConfig[t]);
+
+            if (tickers.length === 0) {
                 setTimeout(tick, CHECK_INTERVAL);
                 return;
             }
 
-            // Clean up old boundary keys
-            if (executedMarketIds.size > 20) {
-                executedMarketIds.clear();
-            }
-
-            const tickers: ('btc')[] = ['btc'];
             for (const ticker of tickers) {
+                const tickerBoundaryKey = `${boundaryKey}-${ticker}`;
+                if (executedMarketIds.has(tickerBoundaryKey)) {
+                    continue;
+                }
+
                 const market = await getCurrentMarket(ticker);
                 if (!market) {
                     console.log(`[Sniper] ⚠️ No ${ticker.toUpperCase()} market found at T-${secondsLeft}s`);
@@ -189,7 +240,7 @@ async function tick() {
                 console.log(`[Sniper] 🎯 Executing ${ticker.toUpperCase()} snipe at T-${secondsLeft}s | Market: ${market.question}`);
 
                 // Mark this boundary as executed BEFORE the attempt to prevent double-fires
-                executedMarketIds.add(boundaryKey);
+                executedMarketIds.add(tickerBoundaryKey);
 
                 const result = await executeSnipe(market, ticker);
 
@@ -199,12 +250,13 @@ async function tick() {
 
                     if (config?.telegramService) {
                         config.telegramService.sendAlert(
-                            `✅ LIVE: Snipe Executed\n` +
+                            `✅ 🔴 LIVE Snipe Executed\n\n` +
+                            `Asset: ${ticker.toUpperCase()}\n` +
                             `Market: ${market.question}\n` +
                             `Side: ${result.side}\n` +
                             `Price: $${result.price}\n` +
                             `Shares: ${result.shares}\n` +
-                            `${ticker.toUpperCase()} at entry: $${result.priceValue}`
+                            `Spot at entry: $${result.priceValue}`
                         );
                     }
                 } else {
@@ -259,18 +311,19 @@ async function executeSnipe(market: any, ticker: 'btc' | 'eth' | 'sol' | 'bnb', 
         const side = priceValue > strikePrice ? 'YES' : 'NO';
         console.log(`[Sniper] Side Choice: ${side} (${ticker.toUpperCase()} T-10s spot $${priceValue} vs strike $${strikePrice})`);
 
-        // 4. Position sizing fixed to 5 shares per trade (Polymarket orderMinSize = 5)
+        // 4. Position sizing: Fixed at 5 shares for live trading / all trades
         const entryPrice = 0.97;
-        const shares = sharesOverride || 5;
-        console.log(`[Sniper] T-10s Position Size: ${shares} shares (Price Gap $${priceGap.toFixed(4)} vs Min Guard $${minGap})`);
+        const isBoosted = priceGap >= BOOST_GAP_THRESHOLDS[ticker];
+        const defaultShares = 5;
+        const shares = sharesOverride || defaultShares;
+        console.log(`[Sniper] T-10s Position Size: ${shares} shares (${isBoosted ? '🚀 BOOSTED SIGNAL' : 'Standard Tier'} | Price Gap $${priceGap.toFixed(4)} vs Boost Guard $${BOOST_GAP_THRESHOLDS[ticker]})`);
 
         // 5. Execute the trade
         const polymarketService = config?.getPolymarketService ? config.getPolymarketService() : null;
         if (!polymarketService) {
             return { success: false, error: 'Polymarket Service not initialized (check PROXY_ADDRESS and POLYGON_PRIVATE_KEY)' };
         }
-        const cost = shares * entryPrice;
-        const result = await polymarketService.placeSnipe(market, side, entryPrice, cost);
+        const result = await polymarketService.placeSnipe(market, side, entryPrice, shares);
 
         if (result && result.success) {
             return {
@@ -281,11 +334,12 @@ async function executeSnipe(market: any, ticker: 'btc' | 'eth' | 'sol' | 'bnb', 
                 priceValue: priceValue,
             };
         } else {
-            return { success: false, error: result?.error || 'Live trade placement failed' };
+            const errText = typeof result?.error === 'string' ? result.error : JSON.stringify(result?.error || 'Live trade placement failed');
+            return { success: false, error: errText };
         }
 
-    } catch (error) {
-        return { success: false, error: String(error) };
+    } catch (error: any) {
+        return { success: false, error: error?.message || String(error) };
     }
 }
 
